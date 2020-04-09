@@ -1,0 +1,2 @@
+# finNLP
+finNLP shared task
