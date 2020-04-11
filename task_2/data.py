@@ -57,7 +57,51 @@ class FinCausalExample:
             ]
 
 
+class FinCausalFeatures:
+
+    def __init__(
+            self,
+            input_ids,
+            attention_mask,
+            token_type_ids,
+            cls_index,
+            p_mask,
+            example_orig_index,
+            example_index,
+            unique_id,
+            paragraph_len,
+            token_is_max_context,
+            tokens,
+            token_to_orig_map,
+            cause_start_position,
+            cause_end_position,
+            effect_start_position,
+            effect_end_position,
+            is_impossible,
+    ):
+        self.input_ids = input_ids
+        self.attention_mask = attention_mask
+        self.token_type_ids = token_type_ids
+        self.cls_index = cls_index
+        self.p_mask = p_mask
+
+        self.example_orig_index = example_orig_index
+        self.example_index = example_index
+        self.unique_id = unique_id
+        self.paragraph_len = paragraph_len
+        self.token_is_max_context = token_is_max_context
+        self.tokens = tokens
+        self.token_to_orig_map = token_to_orig_map
+
+        self.cause_start_position = cause_start_position
+        self.cause_end_position = cause_end_position
+        self.effect_start_position = effect_start_position
+        self.effect_end_position = effect_end_position
+        self.is_impossible = is_impossible
+
+
 def _is_whitespace(c):
     if c == " " or c == "\t" or c == "\r" or c == "\n" or ord(c) == 0x202F:
         return True
     return False
+

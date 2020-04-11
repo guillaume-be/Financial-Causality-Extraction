@@ -15,28 +15,27 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import json
 import logging
 import multiprocessing
 import os
 from functools import partial
 from pathlib import Path
-from typing import Union
+from typing import Union, List
 
 import numpy as np
 import pandas as pd
 import torch
 from torch.utils.data import TensorDataset
 from tqdm import tqdm
-from transformers import SquadFeatures
 from transformers.tokenization_bert import whitespace_tokenize
 
-from task_2.data import FinCausalExample
+from task_2.data import FinCausalExample, FinCausalFeatures
 
 logger = logging.getLogger(__name__)
 
 
-def load_and_cache_examples(file_path: Path, model_name_or_path: str, tokenizer,
+def load_and_cache_examples(file_path: Path, model_name_or_path: str,
+                            tokenizer,
                             max_seq_length: int, doc_stride: int,
                             output_examples: bool = True,
                             evaluate=False, overwrite_cache: bool = False):
@@ -62,41 +61,42 @@ def load_and_cache_examples(file_path: Path, model_name_or_path: str, tokenizer,
     else:
         logger.info("Creating features from dataset file at %s", input_dir)
         processor = FinCausalProcessor()
-        examples = processor.get_examples(file_path, not evaluate)
+        examples = processor.get_examples(file_path)
 
-    #     features, dataset = squad_convert_examples_to_features(
-    #         examples=examples,
-    #         tokenizer=tokenizer,
-    #         max_seq_length=max_seq_length,
-    #         doc_stride=doc_stride,
-    #         is_training=not evaluate,
-    #         return_dataset="pt",
-    #         threads=multiprocessing.cpu_count(),
-    #     )
-    #
-    #     logger.info("Saving features into cached file %s", cached_features_file)
-    #     torch.save({"features": features, "dataset": dataset, "examples": examples}, cached_features_file)
-    #
-    # if output_examples:
-    #     return dataset, examples, features
-    # return dataset
+        features, dataset = fincausal_convert_examples_to_features(
+            examples=examples,
+            tokenizer=tokenizer,
+            max_seq_length=max_seq_length,
+            doc_stride=doc_stride,
+            is_training=not evaluate,
+            return_dataset="pt",
+            # threads=multiprocessing.cpu_count(),
+            threads=1,
+        )
+
+        logger.info("Saving features into cached file %s", cached_features_file)
+        torch.save({"features": features, "dataset": dataset, "examples": examples}, cached_features_file)
+
+    if output_examples:
+        return dataset, examples, features
+    return dataset
 
 
 class FinCausalProcessor:
 
-    def get_examples(self, file_path: Path, train: bool):
-        input_data = pd.read_csv(file_path, delimiter=';', header=0, skipinitialspace=True)
+    def get_examples(self, file_path: Path):
+        input_data = pd.read_csv(file_path, index_col=0, delimiter=';', header=0, skipinitialspace=True)
         input_data.columns = [col_name.strip() for col_name in input_data.columns]
-        return self._create_examples(input_data, train)
+        return self._create_examples(input_data)
 
     @staticmethod
-    def _create_examples(input_data, train: bool):
+    def _create_examples(input_data):
         examples = []
         for entry in tqdm(input_data.itertuples()):
-            context_text = entry.Text
+            context_text = entry.Text.replace(u'\xa0', u' ')
             example_id = entry.Index
-            cause_text = entry.Cause
-            effect_text = entry.Effect
+            cause_text = entry.Cause.replace(u'\xa0', u' ')
+            effect_text = entry.Effect.replace(u'\xa0', u' ')
             cause_start_position_character = entry.Cause_Start
             cause_end_position_character = entry.Cause_End
             effect_start_position_character = entry.Effect_Start
@@ -121,7 +121,11 @@ def fincausal_convert_example_to_features_init(tokenizer_for_convert):
     tokenizer = tokenizer_for_convert
 
 
-def _improve_answer_span(doc_tokens, input_start, input_end, tokenizer, orig_answer_text):
+def _improve_answer_span(doc_tokens: List[str],
+                         input_start: int,
+                         input_end: int,
+                         tokenizer,
+                         orig_answer_text: str):
     """Returns tokenized answer spans that better match the annotated answer."""
     tok_answer_text = " ".join(tokenizer.tokenize(orig_answer_text))
 
@@ -134,7 +138,9 @@ def _improve_answer_span(doc_tokens, input_start, input_end, tokenizer, orig_ans
     return input_start, input_end
 
 
-def _new_check_is_max_context(doc_spans, cur_span_index, position):
+def _new_check_is_max_context(doc_spans: List[dict],
+                              cur_span_index: int,
+                              position: int):
     """Check if this is the 'max context' doc span for the token."""
     # if len(doc_spans) == 1:
     # return True
@@ -156,18 +162,30 @@ def _new_check_is_max_context(doc_spans, cur_span_index, position):
     return cur_span_index == best_span_index
 
 
-def fincausal_convert_example_to_features(example, max_seq_length, doc_stride, max_query_length, is_training):
+def fincausal_convert_example_to_features(example: FinCausalExample,
+                                          max_seq_length: int,
+                                          doc_stride: int,
+                                          is_training: bool):
     features = []
-    if is_training and not example.is_impossible:
+    if is_training:
         # Get start and end position
-        start_position = example.start_position
-        end_position = example.end_position
+        start_cause_position = example.start_cause_position
+        end_cause_position = example.end_cause_position
+        start_effect_position = example.start_effect_position
+        end_effect_position = example.end_effect_position
 
-        # If the answer cannot be found in the text, then skip this example.
-        actual_text = " ".join(example.doc_tokens[start_position: (end_position + 1)])
-        cleaned_answer_text = " ".join(whitespace_tokenize(example.answer_text))
-        if actual_text.find(cleaned_answer_text) == -1:
-            logger.warning("Could not find answer: '%s' vs. '%s'", actual_text, cleaned_answer_text)
+        # If the cause cannot be found in the text, then skip this example.
+        actual_cause_text = " ".join(example.doc_tokens[start_cause_position: (end_cause_position + 1)])
+        cleaned_cause_text = " ".join(whitespace_tokenize(example.cause_text))
+        if actual_cause_text.find(cleaned_cause_text) == -1:
+            logger.warning("Could not find cause: '%s' vs. '%s'", actual_cause_text, cleaned_cause_text)
+            return []
+
+        # If the effect cannot be found in the text, then skip this example.
+        actual_effect_text = " ".join(example.doc_tokens[start_effect_position: (end_effect_position + 1)])
+        cleaned_effect_text = " ".join(whitespace_tokenize(example.effect_text))
+        if actual_effect_text.find(cleaned_effect_text) == -1:
+            logger.warning("Could not find effect: '%s' vs. '%s'", actual_effect_text, cleaned_effect_text)
             return []
 
     tok_to_orig_index = []
@@ -180,44 +198,50 @@ def fincausal_convert_example_to_features(example, max_seq_length, doc_stride, m
             tok_to_orig_index.append(i)
             all_doc_tokens.append(sub_token)
 
-    if is_training and not example.is_impossible:
-        tok_start_position = orig_to_tok_index[example.start_position]
-        if example.end_position < len(example.doc_tokens) - 1:
-            tok_end_position = orig_to_tok_index[example.end_position + 1] - 1
+    if is_training:
+        tok_cause_start_position = orig_to_tok_index[example.start_cause_position]
+        if example.end_cause_position < len(example.doc_tokens) - 1:
+            tok_cause_end_position = orig_to_tok_index[example.end_cause_position + 1] - 1
         else:
-            tok_end_position = len(all_doc_tokens) - 1
+            tok_cause_end_position = len(all_doc_tokens) - 1
 
-        (tok_start_position, tok_end_position) = _improve_answer_span(
-            all_doc_tokens, tok_start_position, tok_end_position, tokenizer, example.answer_text
+        (tok_cause_start_position, tok_cause_end_position) = _improve_answer_span(
+            all_doc_tokens, tok_cause_start_position, tok_cause_end_position, tokenizer, example.cause_text
+        )
+
+        tok_effect_start_position = orig_to_tok_index[example.start_effect_position]
+        if example.end_effect_position < len(example.doc_tokens) - 1:
+            tok_effect_end_position = orig_to_tok_index[example.end_effect_position + 1] - 1
+        else:
+            tok_effect_end_position = len(all_doc_tokens) - 1
+
+        (tok_effect_start_position, tok_effect_end_position) = _improve_answer_span(
+            all_doc_tokens, tok_effect_start_position, tok_effect_end_position, tokenizer, example.effect_text
         )
 
     spans = []
 
-    truncated_query = tokenizer.encode(example.question_text, add_special_tokens=False, max_length=max_query_length)
     sequence_added_tokens = (
-        tokenizer.max_len - tokenizer.max_len_single_sentence + 1
+        tokenizer.max_len - tokenizer.max_len_single_sentence
         if "roberta" in str(type(tokenizer)) or "camembert" in str(type(tokenizer))
-        else tokenizer.max_len - tokenizer.max_len_single_sentence
+        else tokenizer.max_len - tokenizer.max_len_single_sentence - 1
     )
-    sequence_pair_added_tokens = tokenizer.max_len - tokenizer.max_len_sentences_pair
 
     span_doc_tokens = all_doc_tokens
     while len(spans) * doc_stride < len(all_doc_tokens):
 
-        encoded_dict = tokenizer.encode_plus(
-            truncated_query if tokenizer.padding_side == "right" else span_doc_tokens,
-            span_doc_tokens if tokenizer.padding_side == "right" else truncated_query,
-            max_length=max_seq_length,
-            return_overflowing_tokens=True,
-            pad_to_max_length=True,
-            stride=max_seq_length - doc_stride - len(truncated_query) - sequence_pair_added_tokens,
-            truncation_strategy="only_second" if tokenizer.padding_side == "right" else "only_first",
-            return_token_type_ids=True,
-        )
+        encoded_dict = tokenizer.encode_plus(span_doc_tokens,
+                                             max_length=max_seq_length,
+                                             return_overflowing_tokens=True,
+                                             pad_to_max_length=True,
+                                             stride=max_seq_length - doc_stride - sequence_added_tokens - 1,
+                                             truncation_strategy="only_first",
+                                             return_token_type_ids=True,
+                                             )
 
         paragraph_len = min(
             len(all_doc_tokens) - len(spans) * doc_stride,
-            max_seq_length - len(truncated_query) - sequence_pair_added_tokens,
+            max_seq_length - sequence_added_tokens,
         )
 
         if tokenizer.pad_token_id in encoded_dict["input_ids"]:
@@ -225,25 +249,23 @@ def fincausal_convert_example_to_features(example, max_seq_length, doc_stride, m
                 non_padded_ids = encoded_dict["input_ids"][: encoded_dict["input_ids"].index(tokenizer.pad_token_id)]
             else:
                 last_padding_id_position = (
-                        len(encoded_dict["input_ids"]) - 1 - encoded_dict["input_ids"][::-1].index(
-                    tokenizer.pad_token_id)
+                        len(encoded_dict["input_ids"])
+                        - 1
+                        - encoded_dict["input_ids"][::-1].index(tokenizer.pad_token_id)
                 )
                 non_padded_ids = encoded_dict["input_ids"][last_padding_id_position + 1:]
-
         else:
             non_padded_ids = encoded_dict["input_ids"]
 
         tokens = tokenizer.convert_ids_to_tokens(non_padded_ids)
 
         token_to_orig_map = {}
-        for i in range(paragraph_len):
-            index = len(truncated_query) + sequence_added_tokens + i if tokenizer.padding_side == "right" else i
-            token_to_orig_map[index] = tok_to_orig_index[len(spans) * doc_stride + i]
+        for index in range(paragraph_len):
+            token_to_orig_map[index] = tok_to_orig_index[len(spans) * doc_stride + index]
 
         encoded_dict["paragraph_len"] = paragraph_len
         encoded_dict["tokens"] = tokens
         encoded_dict["token_to_orig_map"] = token_to_orig_map
-        encoded_dict["truncated_query_with_special_tokens_length"] = len(truncated_query) + sequence_added_tokens
         encoded_dict["token_is_max_context"] = {}
         encoded_dict["start"] = len(spans) * doc_stride
         encoded_dict["length"] = paragraph_len
@@ -257,12 +279,7 @@ def fincausal_convert_example_to_features(example, max_seq_length, doc_stride, m
     for doc_span_index in range(len(spans)):
         for j in range(spans[doc_span_index]["paragraph_len"]):
             is_max_context = _new_check_is_max_context(spans, doc_span_index, doc_span_index * doc_stride + j)
-            index = (
-                j
-                if tokenizer.padding_side == "left"
-                else spans[doc_span_index]["truncated_query_with_special_tokens_length"] + j
-            )
-            spans[doc_span_index]["token_is_max_context"][index] = is_max_context
+            spans[doc_span_index]["token_is_max_context"][j] = is_max_context
 
     for span in spans:
         # Identify the position of the CLS token
@@ -270,74 +287,74 @@ def fincausal_convert_example_to_features(example, max_seq_length, doc_stride, m
 
         # p_mask: mask with 1 for token than cannot be in the answer (0 for token which can be in an answer)
         # Original TF implem also keep the classification token (set to 0) (not sure why...)
-        p_mask = np.array(span["token_type_ids"])
-
-        p_mask = np.minimum(p_mask, 1)
-
-        if tokenizer.padding_side == "right":
-            # Limit positive values to one
-            p_mask = 1 - p_mask
-
+        p_mask = np.ones(len(span["token_type_ids"]))
         p_mask[np.where(np.array(span["input_ids"]) == tokenizer.sep_token_id)[0]] = 1
-
         # Set the CLS index to '0'
         p_mask[cls_index] = 0
 
-        span_is_impossible = example.is_impossible
-        start_position = 0
-        end_position = 0
-        if is_training and not span_is_impossible:
+        span_is_impossible = False
+        cause_start_position = 0
+        cause_end_position = 0
+        effect_start_position = 0
+        effect_end_position = 0
+        if is_training:
             # For training, if our document chunk does not contain an annotation
             # we throw it out, since there is nothing to predict.
             doc_start = span["start"]
             doc_end = span["start"] + span["length"] - 1
             out_of_span = False
 
-            if not (tok_start_position >= doc_start and tok_end_position <= doc_end):
+            if not (tok_cause_start_position >= doc_start
+                    and tok_cause_end_position <= doc_end
+                    and tok_effect_start_position >= doc_start
+                    and tok_effect_end_position <= doc_end):
                 out_of_span = True
 
             if out_of_span:
-                start_position = cls_index
-                end_position = cls_index
+                cause_start_position = cls_index
+                cause_end_position = cls_index
+                effect_start_position = cls_index
+                effect_end_position = cls_index
                 span_is_impossible = True
             else:
                 if tokenizer.padding_side == "left":
                     doc_offset = 0
                 else:
-                    doc_offset = len(truncated_query) + sequence_added_tokens
+                    doc_offset = sequence_added_tokens
 
-                start_position = tok_start_position - doc_start + doc_offset
-                end_position = tok_end_position - doc_start + doc_offset
+                cause_start_position = tok_cause_start_position - doc_start + doc_offset
+                cause_end_position = tok_cause_end_position - doc_start + doc_offset
+                effect_start_position = tok_effect_start_position - doc_start + doc_offset
+                effect_end_position = tok_effect_end_position - doc_start + doc_offset
 
         features.append(
-            SquadFeatures(
+            FinCausalFeatures(
                 span["input_ids"],
                 span["attention_mask"],
                 span["token_type_ids"],
                 cls_index,
                 p_mask.tolist(),
+                example_orig_index=example.example_id,
                 example_index=0,
-                # Can not set unique_id and example_index here. They will be set after multiple processing.
                 unique_id=0,
                 paragraph_len=span["paragraph_len"],
                 token_is_max_context=span["token_is_max_context"],
                 tokens=span["tokens"],
                 token_to_orig_map=span["token_to_orig_map"],
-                start_position=start_position,
-                end_position=end_position,
+                cause_start_position=cause_start_position,
+                cause_end_position=cause_end_position,
+                effect_start_position=effect_start_position,
+                effect_end_position=effect_end_position,
                 is_impossible=span_is_impossible,
             )
         )
     return features
 
 
-def squad_convert_examples_to_features(
-        examples, tokenizer, max_seq_length, doc_stride, max_query_length, is_training,
-        return_dataset: Union[bool, str] = False, threads=1
+def fincausal_convert_examples_to_features(
+        examples: List[FinCausalExample], tokenizer, max_seq_length: int, doc_stride: int, is_training: bool,
+        return_dataset: Union[bool, str] = False, threads: int = 1
 ):
-    # Defining helper methods
-    features = []
-
     with multiprocessing.Pool(threads,
                               initializer=fincausal_convert_example_to_features_init,
                               initargs=(tokenizer,)) as p:
@@ -345,10 +362,9 @@ def squad_convert_examples_to_features(
             fincausal_convert_example_to_features,
             max_seq_length=max_seq_length,
             doc_stride=doc_stride,
-            max_query_length=max_query_length,
             is_training=is_training,
         )
-        features = list(
+        features: List[FinCausalFeatures] = list(
             tqdm(
                 p.imap(annotate_, examples, chunksize=32),
                 total=len(examples),
@@ -385,14 +401,18 @@ def squad_convert_examples_to_features(
                 all_input_ids, all_attention_masks, all_token_type_ids, all_example_index, all_cls_index, all_p_mask
             )
         else:
-            all_start_positions = torch.tensor([f.start_position for f in features], dtype=torch.long)
-            all_end_positions = torch.tensor([f.end_position for f in features], dtype=torch.long)
+            all_cause_start_positions = torch.tensor([f.cause_start_position for f in features], dtype=torch.long)
+            all_cause_end_positions = torch.tensor([f.cause_end_position for f in features], dtype=torch.long)
+            all_effect_start_positions = torch.tensor([f.effect_start_position for f in features], dtype=torch.long)
+            all_effect_end_positions = torch.tensor([f.effect_end_position for f in features], dtype=torch.long)
             dataset = TensorDataset(
                 all_input_ids,
                 all_attention_masks,
                 all_token_type_ids,
-                all_start_positions,
-                all_end_positions,
+                all_cause_start_positions,
+                all_cause_end_positions,
+                all_effect_start_positions,
+                all_effect_end_positions,
                 all_cls_index,
                 all_p_mask,
                 all_is_impossible,
