@@ -16,6 +16,7 @@
 
 import logging
 import os
+from pathlib import Path
 from typing import Optional
 
 import torch
@@ -23,14 +24,13 @@ from torch.utils.data import RandomSampler, DataLoader
 from torch.utils.tensorboard import SummaryWriter
 from tqdm import trange, tqdm
 from transformers import AdamW, get_linear_schedule_with_warmup
-
-# from .evaluate import evaluate
+from task_2.library.evaluation import evaluate
 
 logger = logging.getLogger(__name__)
 
 
 def train(train_dataset, model, tokenizer, train_batch_size: int,
-          model_type: str, model_name_or_path: str, output_dir: str, device: torch.device,
+          model_type: str, model_name_or_path: str, output_dir: str, predict_file: Path, device: torch.device,
           max_steps: Optional[int], gradient_accumulation_steps: int, num_train_epochs: int, warmup_steps: int,
           logging_steps: int, save_steps: int, evaluate_during_training: bool,
           max_seq_length: int, doc_stride: int, eval_batch_size: int,
@@ -146,33 +146,34 @@ def train(train_dataset, model, tokenizer, train_batch_size: int,
                 global_step += 1
 
                 # Log metrics
-                if logging_steps > 0 and global_step % logging_steps == 0:
+                if (logging_steps > 0 and global_step % logging_steps == 0) or \
+                        global_step % (len(train_dataloader) // gradient_accumulation_steps) == 0:
                     if evaluate_during_training:
-                        # results = evaluate(model, tokenizer, device, input_dir, model_type, model_name_or_path,
-                        #                    max_seq_length, doc_stride, max_query_length, eval_batch_size, output_dir,
-                        #                    n_best_size, max_answer_length, do_lower_case)
-                        # for key, value in results.items():
-                        #     tb_writer.add_scalar("eval_{}".format(key), value, global_step)
-                        pass
+                        results = evaluate(model, tokenizer, device, predict_file, model_type, model_name_or_path,
+                                           max_seq_length, doc_stride, eval_batch_size, output_dir,
+                                           n_best_size, max_answer_length, do_lower_case)
+                        for key, value in results.items():
+                            tb_writer.add_scalar("eval_{}".format(key), value, global_step)
                     tb_writer.add_scalar("lr", scheduler.get_lr()[0], global_step)
                     tb_writer.add_scalar("loss", (tr_loss - logging_loss) / logging_steps, global_step)
                     logging_loss = tr_loss
 
                 # Save model checkpoint
-                if save_steps > 0 and global_step % save_steps == 0:
-                    output_dir = os.path.join(output_dir, "checkpoint-{}".format(global_step))
-                    if not os.path.exists(output_dir):
-                        os.makedirs(output_dir)
+                if (save_steps > 0 and global_step % save_steps == 0) or \
+                        global_step % (len(train_dataloader) // gradient_accumulation_steps) == 0:
+                    _output_dir = os.path.join(output_dir, "checkpoint-{}".format(global_step))
+                    if not os.path.exists(_output_dir):
+                        os.makedirs(_output_dir)
                     # Take care of distributed/parallel training
                     model_to_save = model.module if hasattr(model, "module") else model
-                    model_to_save.save_pretrained(output_dir)
-                    tokenizer.save_pretrained(output_dir)
+                    model_to_save.save_pretrained(_output_dir)
+                    tokenizer.save_pretrained(_output_dir)
 
-                    logger.info("Saving model checkpoint to %s", output_dir)
+                    logger.info("Saving model checkpoint to %s", _output_dir)
 
-                    torch.save(optimizer.state_dict(), os.path.join(output_dir, "optimizer.pt"))
-                    torch.save(scheduler.state_dict(), os.path.join(output_dir, "scheduler.pt"))
-                    logger.info("Saving optimizer and scheduler states to %s", output_dir)
+                    # torch.save(optimizer.state_dict(), os.path.join(_output_dir, "optimizer.pt"))
+                    torch.save(scheduler.state_dict(), os.path.join(_output_dir, "scheduler.pt"))
+                    logger.info("Saving optimizer and scheduler states to %s", _output_dir)
 
             if max_steps is not None and global_step > max_steps:
                 epoch_iterator.close()

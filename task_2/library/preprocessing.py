@@ -29,7 +29,7 @@ from torch.utils.data import TensorDataset
 from tqdm import tqdm
 from transformers.tokenization_bert import whitespace_tokenize
 
-from task_2.data import FinCausalExample, FinCausalFeatures
+from task_2.library.data import FinCausalExample, FinCausalFeatures
 
 logger = logging.getLogger(__name__)
 
