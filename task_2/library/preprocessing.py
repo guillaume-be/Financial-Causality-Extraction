@@ -260,8 +260,9 @@ def fincausal_convert_example_to_features(example: FinCausalExample,
         tokens = tokenizer.convert_ids_to_tokens(non_padded_ids)
 
         token_to_orig_map = {}
-        for index in range(paragraph_len):
-            token_to_orig_map[index] = tok_to_orig_index[len(spans) * doc_stride + index]
+        for i in range(paragraph_len):
+            index = sequence_added_tokens + i
+            token_to_orig_map[index] = tok_to_orig_index[len(spans) * doc_stride + i]
 
         encoded_dict["paragraph_len"] = paragraph_len
         encoded_dict["tokens"] = tokens

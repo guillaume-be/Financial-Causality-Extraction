@@ -6,6 +6,7 @@ import torch
 from transformers import DistilBertTokenizer
 
 from task_2.library.evaluation import evaluate
+from task_2.library.evaluation_one_step import evaluate_one_step
 from task_2.library.model import DistilBertForCauseEffect
 from task_2.library.preprocessing import load_and_cache_examples
 from task_2.library.training import train
@@ -26,7 +27,7 @@ OVERWRITE_CACHE = False
 # Training
 PER_GPU_BATCH_SIZE = 12
 GRADIENT_ACCUMULATION_STEPS = 1
-WARMUP_STEPS = 20
+WARMUP_STEPS = 5
 LEARNING_RATE = 3e-5
 NUM_TRAIN_EPOCHS = 3
 # Evaluation
@@ -91,7 +92,6 @@ if __name__ == '__main__':
                                                         do_lower_case=DO_LOWER_CASE)
         model = DistilBertForCauseEffect.from_pretrained(OUTPUT_DIR).to(device)
 
-        result = evaluate(model, tokenizer, device, PREDICT_FILE, MODEL_TYPE, MODEL_NAME_OR_PATH,
-                          MAX_SEQ_LENGTH, DOC_STRIDE, PER_GPU_EVAL_BATCH_SIZE, OUTPUT_DIR,
-                          N_BEST_SIZE, MAX_ANSWER_LENGTH, DO_LOWER_CASE)
-        pass
+        result = evaluate_one_step(model, tokenizer, device, PREDICT_FILE, MODEL_TYPE, MODEL_NAME_OR_PATH,
+                                   MAX_SEQ_LENGTH, DOC_STRIDE, PER_GPU_EVAL_BATCH_SIZE, OUTPUT_DIR,
+                                   N_BEST_SIZE, MAX_ANSWER_LENGTH, DO_LOWER_CASE)
