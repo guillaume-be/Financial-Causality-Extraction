@@ -93,10 +93,10 @@ class FinCausalProcessor:
     def _create_examples(input_data):
         examples = []
         for entry in tqdm(input_data.itertuples()):
-            context_text = entry.Text.replace(u'\xa0', u' ')
+            context_text = entry.Text
             example_id = entry.Index
-            cause_text = entry.Cause.replace(u'\xa0', u' ')
-            effect_text = entry.Effect.replace(u'\xa0', u' ')
+            cause_text = entry.Cause
+            effect_text = entry.Effect
             cause_start_position_character = entry.Cause_Start
             cause_end_position_character = entry.Cause_End
             effect_start_position_character = entry.Effect_Start
