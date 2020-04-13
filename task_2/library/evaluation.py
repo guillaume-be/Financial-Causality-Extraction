@@ -22,13 +22,16 @@ import timeit
 from enum import Enum
 from pathlib import Path
 from typing import Dict, List
+import numpy as np
 
 import torch
+from sklearn.metrics import classification_report, precision_recall_fscore_support
 from torch.utils.data import SequentialSampler, DataLoader
 from tqdm import tqdm
 from transformers import BasicTokenizer
 
 from task_2.library.data import FinCausalResult, FinCausalFeatures, FinCausalExample
+from task_2.library.fincausal_evaluation.evaluation_utils import s2dict, make_causal_input
 from task_2.library.preprocessing import load_and_cache_examples
 
 logger = logging.getLogger(__name__)
@@ -98,8 +101,6 @@ def evaluate(model, tokenizer, device: torch.device, file_path: Path, model_type
     output_prediction_file = os.path.join(output_dir, "predictions_{}.json".format(prefix))
     output_nbest_file = os.path.join(output_dir, "nbest_predictions_{}.json".format(prefix))
 
-    output_null_log_odds_file = None
-
     predictions = compute_predictions_logits(
         examples,
         features,
@@ -113,9 +114,53 @@ def evaluate(model, tokenizer, device: torch.device, file_path: Path, model_type
         tokenizer,
     )
 
-    # # Compute the F1 and exact scores.
-    # results = squad_evaluate(examples, predictions)
-    # return results
+    # Compute the F1 and exact scores.
+    results = compute_metrics(examples, predictions)
+    return results
+
+
+def compute_metrics(examples: List[FinCausalExample], predictions: collections.OrderedDict):
+    y_true = []
+    y_pred = []
+
+    map1 = ['sentence', 'cause', 'effect']
+    for example in examples:
+        dict_true = s2dict([example.context_text, example.cause_text, example.effect_text], map1)
+        y_true.append(dict_true)
+        prediction = predictions[example.example_id]
+        dict_pred = s2dict([example.context_text, prediction['cause_text'], prediction['effect_text']], map1)
+        y_pred.append(dict_pred)
+
+    hometags_true = make_causal_input(y_true)
+    hometags_pred = make_causal_input(y_pred)
+    labels = {"C": 1, "E": 2, "_": 0}
+    y_true = np.array([labels[token[1]] for row in hometags_true for token in row])
+    y_pred = np.array([labels[token[1]] for row in hometags_pred for token in row])
+    # print('************************ classification report ***************************', '\t')
+    # print(classification_report(
+    #     y_true, y_pred,
+    #     target_names=["_", "C", "E"]))
+
+    print('************************ tasks metrics ***************************', '\t')
+
+    F1metrics = precision_recall_fscore_support(y_true, y_pred, average='weighted')
+
+    nl = []
+    for yt, yp in zip(y_true, y_pred):
+        d_ = dict()
+        d_["truth"] = yt
+        d_["pred"] = yp
+        d_["diverge"] = 0
+        if d_["truth"] != d_["pred"]:
+            d_["diverge"] = 1
+        nl.append(d_)
+
+    print('F1score:', F1metrics[2])
+    print('Precision: ', F1metrics[1])
+    print('Recall: ', F1metrics[0])
+    print('exact match: ', sum([1 for i in nl if i["diverge"] == 0]), 'over', len(nl), ' total sentences)')
+
+    return False
 
 
 class SpanType(Enum):
@@ -124,94 +169,127 @@ class SpanType(Enum):
 
 
 _PrelimPrediction = collections.namedtuple(
-    "PrelimPrediction", ["feature_index", "start_index", "end_index", "start_logit", "end_logit"]
+    "PrelimPrediction", ["feature_index",
+                         "start_index_cause", "end_index_cause", "start_logit_cause", "end_logit_cause",
+                         "start_index_effect", "end_index_effect", "start_logit_effect", "end_logit_effect"]
 )
 
-_NbestPrediction = collections.namedtuple(  # pylint: disable=invalid-name
-    "NbestPrediction", ["text", "start_logit", "end_logit"]
+_NbestPrediction = collections.namedtuple(
+    "NbestPrediction", ["text_cause", "start_logit_cause", "end_logit_cause",
+                        "text_effect", "start_logit_effect", "end_logit_effect"]
 )
 
 
-def filter_impossible_spans(features, span_type: SpanType, unique_id_to_result: Dict,
+def filter_impossible_spans(features, unique_id_to_result: Dict,
                             n_best_size: int, max_answer_length: int) -> List[_PrelimPrediction]:
     prelim_predictions = []
 
     for (feature_index, feature) in enumerate(features):
         result = unique_id_to_result[feature.unique_id]
         assert isinstance(result, FinCausalResult)
-        assert isinstance(span_type, SpanType)
-        if span_type == SpanType.cause:
-            start_indexes = _get_best_indexes(result.start_cause_logits, n_best_size)
-            end_indexes = _get_best_indexes(result.end_cause_logits, n_best_size)
-            start_logits = result.start_cause_logits
-            end_logits = result.end_cause_logits
-        else:
-            start_indexes = _get_best_indexes(result.start_effect_logits, n_best_size)
-            end_indexes = _get_best_indexes(result.end_effect_logits, n_best_size)
-            start_logits = result.start_effect_logits
-            end_logits = result.end_effect_logits
-        for start_index in start_indexes:
-            for end_index in end_indexes:
-                if start_index >= len(feature.tokens):
-                    continue
-                if end_index >= len(feature.tokens):
-                    continue
-                if start_index not in feature.token_to_orig_map:
-                    continue
-                if end_index not in feature.token_to_orig_map:
-                    continue
-                if not feature.token_is_max_context.get(start_index, False):
-                    continue
-                if end_index < start_index:
-                    continue
-                length = end_index - start_index + 1
-                if length > max_answer_length:
-                    continue
-                prelim_predictions.append(
-                    _PrelimPrediction(
-                        feature_index=feature_index,
-                        start_index=start_index,
-                        end_index=end_index,
-                        start_logit=start_logits[start_index],
-                        end_logit=end_logits[end_index],
-                    )
-                )
+        start_indexes_cause = _get_best_indexes(result.start_cause_logits, n_best_size)
+        end_indexes_cause = _get_best_indexes(result.end_cause_logits, n_best_size)
+        start_logits_cause = result.start_cause_logits
+        end_logits_cause = result.end_cause_logits
+        start_indexes_effect = _get_best_indexes(result.start_effect_logits, n_best_size)
+        end_indexes_effect = _get_best_indexes(result.end_effect_logits, n_best_size)
+        start_logits_effect = result.start_effect_logits
+        end_logits_effect = result.end_effect_logits
+
+        for start_index_cause in start_indexes_cause:
+            for start_index_effect in start_indexes_effect:
+                for end_index_cause in end_indexes_cause:
+                    for end_index_effect in end_indexes_effect:
+                        if (start_index_cause <= start_index_effect) and (end_index_cause >= start_index_effect):
+                            continue
+                        if (start_index_effect <= start_index_cause) and (end_index_effect >= start_index_cause):
+                            continue
+                        if start_index_effect >= len(feature.tokens) or start_index_cause >= len(feature.tokens):
+                            continue
+                        if end_index_effect >= len(feature.tokens) or end_index_cause >= len(feature.tokens):
+                            continue
+                        if start_index_effect not in feature.token_to_orig_map or start_index_cause not in feature.token_to_orig_map:
+                            continue
+                        if end_index_effect not in feature.token_to_orig_map or end_index_cause not in feature.token_to_orig_map:
+                            continue
+                        if (not feature.token_is_max_context.get(start_index_effect, False)) or \
+                                (not feature.token_is_max_context.get(start_index_cause, False)):
+                            continue
+                        if end_index_cause < start_index_cause:
+                            continue
+                        if end_index_effect < start_index_effect:
+                            continue
+                        length_cause = end_index_cause - start_index_cause + 1
+                        length_effect = end_index_effect - start_index_effect + 1
+                        if length_cause > max_answer_length:
+                            continue
+                        if length_effect > max_answer_length:
+                            continue
+
+                        prelim_predictions.append(
+                            _PrelimPrediction(
+                                feature_index=feature_index,
+                                start_index_cause=start_index_cause,
+                                end_index_cause=end_index_cause,
+                                start_logit_cause=start_logits_cause[start_index_cause],
+                                end_logit_cause=end_logits_cause[end_index_cause],
+                                start_index_effect=start_index_effect,
+                                end_index_effect=end_index_effect,
+                                start_logit_effect=start_logits_effect[start_index_effect],
+                                end_logit_effect=end_logits_effect[end_index_effect]
+                            )
+                        )
     return prelim_predictions
 
 
 def get_predictions(preliminary_predictions: List[_PrelimPrediction], n_best_size: int,
                     features: List[FinCausalFeatures], example: FinCausalExample,
                     tokenizer, do_lower_case: bool, verbose_logging: bool) -> List[_NbestPrediction]:
-    seen_predictions = {}
+    seen_predictions_cause = {}
+    seen_predictions_effect = {}
     nbest = []
     for prediction in preliminary_predictions:
         if len(nbest) >= n_best_size:
             break
         feature = features[prediction.feature_index]
-        if prediction.start_index > 0:  # this is a non-null prediction
-            tok_tokens = feature.tokens[prediction.start_index: (prediction.end_index + 1)]
-            orig_doc_start = feature.token_to_orig_map[prediction.start_index]
-            orig_doc_end = feature.token_to_orig_map[prediction.end_index]
-            orig_tokens = example.doc_tokens[orig_doc_start: (orig_doc_end + 1)]
-
-            tok_text = tokenizer.convert_tokens_to_string(tok_tokens)
-
+        if prediction.start_index_cause > 0:  # this is a non-null prediction
+            tok_tokens_cause = feature.tokens[prediction.start_index_cause: (prediction.end_index_cause + 1)]
+            orig_doc_start_cause = feature.token_to_orig_map[prediction.start_index_cause]
+            orig_doc_end_cause = feature.token_to_orig_map[prediction.end_index_cause]
+            orig_tokens_cause = example.doc_tokens[orig_doc_start_cause: (orig_doc_end_cause + 1)]
+            tok_text = tokenizer.convert_tokens_to_string(tok_tokens_cause)
             # Clean whitespace
-            tok_text = tok_text.strip()
-            tok_text = " ".join(tok_text.split())
-            orig_text = " ".join(orig_tokens)
+            tok_text_cause = tok_text.strip()
+            tok_text_cause = " ".join(tok_text_cause.split())
+            orig_text_cause = " ".join(orig_tokens_cause)
+            final_text_cause = get_final_text(tok_text_cause, orig_text_cause, do_lower_case, verbose_logging)
 
-            final_text = get_final_text(tok_text, orig_text, do_lower_case, verbose_logging)
-            if final_text in seen_predictions:
+            tok_tokens_effect = feature.tokens[prediction.start_index_effect: (prediction.end_index_effect + 1)]
+            orig_doc_start_effect = feature.token_to_orig_map[prediction.start_index_effect]
+            orig_doc_end_effect = feature.token_to_orig_map[prediction.end_index_effect]
+            orig_tokens_effect = example.doc_tokens[orig_doc_start_effect: (orig_doc_end_effect + 1)]
+            tok_text = tokenizer.convert_tokens_to_string(tok_tokens_effect)
+            # Clean whitespace
+            tok_text_effect = tok_text.strip()
+            tok_text_effect = " ".join(tok_text_effect.split())
+            orig_text_effect = " ".join(orig_tokens_effect)
+            final_text_effect = get_final_text(tok_text_effect, orig_text_effect, do_lower_case, verbose_logging)
+
+            if final_text_cause in seen_predictions_cause and final_text_effect in seen_predictions_effect:
                 continue
 
-            seen_predictions[final_text] = True
+            seen_predictions_cause[final_text_cause] = True
+            seen_predictions_cause[final_text_effect] = True
         else:
-            final_text = ""
-            seen_predictions[final_text] = True
+            final_text_cause = final_text_effect = ""
+            seen_predictions_cause[final_text_cause] = True
+            seen_predictions_cause[final_text_effect] = True
 
         nbest.append(
-            _NbestPrediction(text=final_text, start_logit=prediction.start_logit, end_logit=prediction.end_logit))
+            _NbestPrediction(text_cause=final_text_cause, start_logit_cause=prediction.start_index_cause,
+                             end_logit_cause=prediction.end_index_cause,
+                             text_effect=final_text_effect, start_logit_effect=prediction.start_index_effect,
+                             end_logit_effect=prediction.end_index_effect))
     return nbest
 
 
@@ -245,67 +323,47 @@ def compute_predictions_logits(
     for (example_index, example) in enumerate(all_examples):
         features = example_index_to_features[example_index]
 
-        prelim_predictions = []
-        prelim_cause_predictions = filter_impossible_spans(features,
-                                                           SpanType.cause,
-                                                           unique_id_to_result,
-                                                           n_best_size,
-                                                           max_answer_length)
-        prelim_effect_predictions = filter_impossible_spans(features,
-                                                            SpanType.effect,
-                                                            unique_id_to_result,
-                                                            n_best_size,
-                                                            max_answer_length)
-        prelim_cause_predictions = sorted(prelim_cause_predictions, key=lambda x: (x.start_logit + x.end_logit),
-                                          reverse=True)
-        prelim_effect_predictions = sorted(prelim_effect_predictions, key=lambda x: (x.start_logit + x.end_logit),
-                                           reverse=True)
+        prelim_predictions = filter_impossible_spans(features,
+                                                     unique_id_to_result,
+                                                     n_best_size,
+                                                     max_answer_length)
+        prelim_predictions = sorted(prelim_predictions,
+                                    key=lambda x: (x.start_logit_cause + x.end_logit_cause +
+                                                   x.start_logit_effect + x.end_logit_effect),
+                                    reverse=True)
 
-        nbest_cause = get_predictions(prelim_cause_predictions, n_best_size, features, example, tokenizer,
-                                      do_lower_case, verbose_logging)
-        nbest_effect = get_predictions(prelim_effect_predictions, n_best_size, features, example, tokenizer,
-                                       do_lower_case, verbose_logging)
+        nbest = get_predictions(prelim_predictions, n_best_size, features, example, tokenizer,
+                                do_lower_case, verbose_logging)
 
         # In very rare edge cases we could have no valid predictions. So we
         # just create a none prediction in this case to avoid failure.
-        if not nbest_cause:
-            nbest_cause.append(_NbestPrediction(text="empty", start_logit=0.0, end_logit=0.0))
-        if not nbest_effect:
-            nbest_effect.append(_NbestPrediction(text="empty", start_logit=0.0, end_logit=0.0))
+        if not nbest:
+            nbest.append(_NbestPrediction(text_cause="empty", start_logit_cause=0.0, end_logit_cause=0.0,
+                                          text_effect="empty", start_logit_effect=0.0, end_logit_effect=0.0))
 
-        assert len(nbest_cause) >= 1 and len(nbest_effect) >= 1
+        assert len(nbest) >= 1
 
-        total_cause_scores = []
-        best_non_null_cause_entry = None
-        for entry in nbest_cause:
-            total_cause_scores.append(entry.start_logit + entry.end_logit)
-            if not best_non_null_cause_entry:
-                if entry.text:
-                    best_non_null_cause_entry = entry
+        total_scores = []
+        best_non_null_entry = None
+        for entry in nbest:
+            total_scores.append(entry.start_logit_cause + entry.end_logit_cause +
+                                entry.start_logit_effect + entry.end_logit_effect)
+            if not best_non_null_entry:
+                if entry.text_cause and entry.text_effect:
+                    best_non_null_entry = entry
 
-        cause_probs = _compute_softmax(total_cause_scores)
-
-        total_effect_scores = []
-        best_non_null_effect_entry = None
-        for entry in nbest_effect:
-            total_effect_scores.append(entry.start_logit + entry.end_logit)
-            if not best_non_null_effect_entry:
-                if entry.text:
-                    best_non_null_effect_entry = entry
-
-        effect_probs = _compute_softmax(total_effect_scores)
+        probs = _compute_softmax(total_scores)
 
         nbest_json = []
-        for (i, (cause_entry, effect_entry)) in enumerate(zip(nbest_cause, nbest_effect)):
+        for (i, entry) in enumerate(nbest):
             output = collections.OrderedDict()
-            output["cause_text"] = cause_entry.text
-            output["cause_probability"] = cause_probs[i]
-            output["cause_start_logit"] = cause_entry.start_logit
-            output["cause_end_logit"] = cause_entry.end_logit
-            output["effect_text"] = effect_entry.text
-            output["effect_probability"] = effect_probs[i]
-            output["effect_start_logit"] = effect_entry.start_logit
-            output["effect_end_logit"] = effect_entry.end_logit
+            output["probability"] = probs[i]
+            output["cause_text"] = entry.text_cause
+            output["cause_start_logit"] = entry.start_logit_cause
+            output["cause_end_logit"] = entry.end_logit_cause
+            output["effect_text"] = entry.text_effect
+            output["effect_start_logit"] = entry.start_logit_effect
+            output["effect_end_logit"] = entry.end_logit_effect
             nbest_json.append(output)
 
         assert len(nbest_json) >= 1
