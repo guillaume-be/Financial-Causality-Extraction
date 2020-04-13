@@ -154,7 +154,7 @@ def train(train_dataset, model, tokenizer, train_batch_size: int,
                                            max_seq_length, doc_stride, eval_batch_size, output_dir,
                                            n_best_size, max_answer_length, do_lower_case)
                         log_file[f'step_{global_step}'] = metrics
-                    tb_writer.add_scalar("lr", scheduler.get_lr()[0], global_step)
+                    tb_writer.add_scalar("lr", scheduler.get_last_lr()[0], global_step)
                     tb_writer.add_scalar("loss", (tr_loss - logging_loss) / logging_steps, global_step)
                     logging_loss = tr_loss
 

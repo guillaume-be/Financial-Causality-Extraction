@@ -163,7 +163,7 @@ def compute_metrics(examples: List[FinCausalExample], predictions: collections.O
         'F1score:': F1metrics[2],
         'Precision: ': F1metrics[1],
         'Recall: ': F1metrics[0],
-        'exact match: ': str(sum([1 for i in nl if i["diverge"] == 0])) + 'over' + str(len(nl)) + ' total sentences)'
+        'exact match: ': str(sum([1 for i in nl if i["diverge"] == 0])) + ' over ' + str(len(nl)) + ' total sentences)'
     }
 
 
