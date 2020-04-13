@@ -28,16 +28,21 @@ class FinCausalExample:
         prev_is_whitespace = True
 
         # Split on whitespace so that different tokens may be attributed to their original position.
-        for c in self.context_text:
-            if _is_whitespace(c):
-                prev_is_whitespace = True
-            else:
-                if prev_is_whitespace:
-                    doc_tokens.append(c)
+        sentences = self.context_text.split('[SEP]')
+        for sent_idx, sent in enumerate(sentences):
+            for c in sent:
+                if _is_whitespace(c):
+                    prev_is_whitespace = True
                 else:
-                    doc_tokens[-1] += c
-                prev_is_whitespace = False
-            char_to_word_offset.append(len(doc_tokens) - 1)
+                    if prev_is_whitespace:
+                        doc_tokens.append(c)
+                    else:
+                        doc_tokens[-1] += c
+                    prev_is_whitespace = False
+                char_to_word_offset.append(len(doc_tokens) - 1)
+                if sent_idx < len(sentences) - 1:
+                    doc_tokens.append('[SEP]')
+                    char_to_word_offset.append(len(doc_tokens) - 1)
 
         self.doc_tokens = doc_tokens
         self.char_to_word_offset = char_to_word_offset

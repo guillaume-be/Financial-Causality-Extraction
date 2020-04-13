@@ -102,6 +102,46 @@ class FinCausalProcessor:
             effect_start_position_character = entry.Effect_Start
             effect_end_position_character = entry.Effect_End
 
+            offset_sentence_2 = entry.Offset_Sentence2
+            offset_sentence_3 = entry.Offset_Sentence3
+
+            if pd.notna(offset_sentence_3):
+                context_text = context_text[:int(offset_sentence_3)] + '[SEP]' + context_text[int(offset_sentence_3):]
+                if cause_start_position_character < offset_sentence_3 < cause_end_position_character:
+                    cause_text = cause_text[:int(offset_sentence_3 - cause_start_position_character)] \
+                                 + '[SEP]' \
+                                 + cause_text[int(offset_sentence_3 - cause_start_position_character):]
+                    cause_end_position_character += 1
+                elif offset_sentence_3 < cause_start_position_character:
+                    cause_end_position_character += 1
+                    cause_start_position_character += 1
+                if effect_start_position_character < offset_sentence_3 < effect_end_position_character:
+                    effect_text = effect_text[:int(offset_sentence_3 - effect_start_position_character)] \
+                                 + '[SEP]' \
+                                 + effect_text[int(offset_sentence_3 - effect_start_position_character):]
+                    effect_end_position_character += 1
+                elif offset_sentence_3 < effect_start_position_character:
+                    effect_start_position_character += 1
+                    effect_end_position_character += 1
+            if pd.notna(offset_sentence_2):
+                context_text = context_text[:int(offset_sentence_2)] + '[SEP]' + context_text[int(offset_sentence_2):]
+                if cause_start_position_character < offset_sentence_2 < cause_end_position_character:
+                    cause_text = cause_text[:int(offset_sentence_2 - cause_start_position_character)] \
+                                 + '[SEP]' \
+                                 + cause_text[int(offset_sentence_2 - cause_start_position_character):]
+                    cause_end_position_character += 1
+                elif offset_sentence_2 < cause_start_position_character:
+                    cause_end_position_character += 1
+                    cause_start_position_character += 1
+                if effect_start_position_character < offset_sentence_2 < effect_end_position_character:
+                    effect_text = effect_text[:int(offset_sentence_2 - effect_start_position_character)] \
+                                 + '[SEP]' \
+                                 + effect_text[int(offset_sentence_2 - effect_start_position_character):]
+                    effect_end_position_character += 1
+                elif offset_sentence_2 < cause_start_position_character:
+                    effect_start_position_character += 1
+                    effect_end_position_character += 1
+
             example = FinCausalExample(
                 example_id,
                 context_text,
@@ -142,8 +182,6 @@ def _new_check_is_max_context(doc_spans: List[dict],
                               cur_span_index: int,
                               position: int):
     """Check if this is the 'max context' doc span for the token."""
-    # if len(doc_spans) == 1:
-    # return True
     best_score = None
     best_span_index = None
     for (span_index, doc_span) in enumerate(doc_spans):
