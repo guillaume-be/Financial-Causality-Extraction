@@ -16,8 +16,8 @@ logger = logging.getLogger(__name__)
 MODEL_TYPE = "distilbert"
 MODEL_NAME_OR_PATH = "distilbert-base-uncased-distilled-squad"
 
-DO_TRAIN = False
-DO_EVAL = True
+DO_TRAIN = True
+DO_EVAL = False
 # Preprocessing
 DO_LOWER_CASE = True  # Set to False for case-sensitive models
 MAX_SEQ_LENGTH = 384
@@ -26,7 +26,7 @@ OVERWRITE_CACHE = False
 # Training
 PER_GPU_BATCH_SIZE = 12
 GRADIENT_ACCUMULATION_STEPS = 1
-WARMUP_STEPS = 5
+WARMUP_STEPS = 20
 LEARNING_RATE = 3e-5
 NUM_TRAIN_EPOCHS = 3
 # Evaluation
@@ -37,6 +37,24 @@ MAX_ANSWER_LENGTH = 300
 TRAIN_FILE = Path("E:/Coding/finNLP/task_2/data/fnp2020-train.csv")
 PREDICT_FILE = Path("E:/Coding/finNLP/task_2/data/fnp2020-dev.csv")
 OUTPUT_DIR = 'E:/Coding/finNLP/task_2/output/'
+
+log_file = {'MODEL_TYPE': MODEL_TYPE,
+            'MODEL_NAME_OR_PATH': MODEL_NAME_OR_PATH,
+            'DO_TRAIN': DO_TRAIN,
+            'DO_EVAL': DO_EVAL,
+            'DO_LOWER_CASE': DO_LOWER_CASE,
+            'MAX_SEQ_LENGTH': MAX_SEQ_LENGTH,
+            'DOC_STRIDE': DOC_STRIDE,
+            'OVERWRITE_CACHE': OVERWRITE_CACHE,
+            'PER_GPU_BATCH_SIZE': PER_GPU_BATCH_SIZE,
+            'GRADIENT_ACCUMULATION_STEPS': GRADIENT_ACCUMULATION_STEPS,
+            'WARMUP_STEPS': WARMUP_STEPS,
+            'LEARNING_RATE': LEARNING_RATE,
+            'NUM_TRAIN_EPOCHS': NUM_TRAIN_EPOCHS,
+            'PER_GPU_EVAL_BATCH_SIZE': PER_GPU_EVAL_BATCH_SIZE,
+            'N_BEST_SIZE': N_BEST_SIZE,
+            'MAX_ANSWER_LENGTH': MAX_ANSWER_LENGTH
+            }
 
 if __name__ == '__main__':
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -69,14 +87,15 @@ if __name__ == '__main__':
                                      warmup_steps=WARMUP_STEPS,
                                      logging_steps=500,
                                      save_steps=500,
-                                     evaluate_during_training=False,
+                                     evaluate_during_training=True,
                                      max_seq_length=MAX_SEQ_LENGTH,
                                      doc_stride=DOC_STRIDE,
                                      eval_batch_size=PER_GPU_EVAL_BATCH_SIZE,
                                      n_best_size=N_BEST_SIZE,
                                      max_answer_length=MAX_ANSWER_LENGTH,
                                      do_lower_case=DO_LOWER_CASE,
-                                     learning_rate=LEARNING_RATE)
+                                     learning_rate=LEARNING_RATE,
+                                     log_file=log_file)
 
         if not os.path.exists(OUTPUT_DIR):
             os.makedirs(OUTPUT_DIR)

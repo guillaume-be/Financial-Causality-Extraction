@@ -13,11 +13,11 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-
+import json
 import logging
 import os
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Dict
 
 import torch
 from torch.utils.data import RandomSampler, DataLoader
@@ -31,9 +31,9 @@ logger = logging.getLogger(__name__)
 
 
 def train(train_dataset, model, tokenizer, train_batch_size: int,
-          model_type: str, model_name_or_path: str, output_dir: str, predict_file: Path, device: torch.device,
-          max_steps: Optional[int], gradient_accumulation_steps: int, num_train_epochs: int, warmup_steps: int,
-          logging_steps: int, save_steps: int, evaluate_during_training: bool,
+          model_type: str, model_name_or_path: str, output_dir: str, predict_file: Path, log_file: Dict,
+          device: torch.device, max_steps: Optional[int], gradient_accumulation_steps: int, num_train_epochs: int,
+          warmup_steps: int, logging_steps: int, save_steps: int, evaluate_during_training: bool,
           max_seq_length: int, doc_stride: int, eval_batch_size: int,
           n_best_size: int, max_answer_length: int, do_lower_case: bool,
           learning_rate: float, weight_decay: float = 0.0, adam_epsilon: float = 1e-8, max_grad_norm: float = 1.0):
@@ -150,11 +150,10 @@ def train(train_dataset, model, tokenizer, train_batch_size: int,
                 if (logging_steps > 0 and global_step % logging_steps == 0) or \
                         global_step % (len(train_dataloader) // gradient_accumulation_steps) == 0:
                     if evaluate_during_training:
-                        results = evaluate(model, tokenizer, device, predict_file, model_type, model_name_or_path,
+                        metrics = evaluate(model, tokenizer, device, predict_file, model_type, model_name_or_path,
                                            max_seq_length, doc_stride, eval_batch_size, output_dir,
                                            n_best_size, max_answer_length, do_lower_case)
-                        for key, value in results.items():
-                            tb_writer.add_scalar("eval_{}".format(key), value, global_step)
+                        log_file[f'step_{global_step}'] = metrics
                     tb_writer.add_scalar("lr", scheduler.get_lr()[0], global_step)
                     tb_writer.add_scalar("loss", (tr_loss - logging_loss) / logging_steps, global_step)
                     logging_loss = tr_loss
@@ -169,12 +168,10 @@ def train(train_dataset, model, tokenizer, train_batch_size: int,
                     model_to_save = model.module if hasattr(model, "module") else model
                     model_to_save.save_pretrained(_output_dir)
                     tokenizer.save_pretrained(_output_dir)
-
                     logger.info("Saving model checkpoint to %s", _output_dir)
-
-                    # torch.save(optimizer.state_dict(), os.path.join(_output_dir, "optimizer.pt"))
-                    torch.save(scheduler.state_dict(), os.path.join(_output_dir, "scheduler.pt"))
-                    logger.info("Saving optimizer and scheduler states to %s", _output_dir)
+                    logger.info("Saving log file to %s", _output_dir)
+                    with open(os.path.join(output_dir, "logs.json"), 'w') as f:
+                        json.dump(log_file, f)
 
             if max_steps is not None and global_step > max_steps:
                 epoch_iterator.close()

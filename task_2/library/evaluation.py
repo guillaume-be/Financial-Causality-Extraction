@@ -64,7 +64,7 @@ def evaluate(model, tokenizer, device: torch.device, file_path: Path, model_type
     all_results = []
     start_time = timeit.default_timer()
 
-    for batch in tqdm(eval_dataloader, desc="Evaluating"):
+    for batch in tqdm(eval_dataloader, desc="Evaluating", position=0, leave=True):
         model.eval()
         batch = tuple(t.to(device) for t in batch)
 
@@ -159,8 +159,12 @@ def compute_metrics(examples: List[FinCausalExample], predictions: collections.O
     print('Precision: ', F1metrics[1])
     print('Recall: ', F1metrics[0])
     print('exact match: ', sum([1 for i in nl if i["diverge"] == 0]), 'over', len(nl), ' total sentences)')
-
-    return False
+    return {
+        'F1score:': F1metrics[2],
+        'Precision: ': F1metrics[1],
+        'Recall: ': F1metrics[0],
+        'exact match: ': str(sum([1 for i in nl if i["diverge"] == 0])) + 'over' + str(len(nl)) + ' total sentences)'
+    }
 
 
 class SpanType(Enum):
