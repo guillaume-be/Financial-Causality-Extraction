@@ -160,7 +160,7 @@ def train(train_dataset, model, tokenizer, train_batch_size: int,
 
                 # Save model checkpoint
                 if (save_steps > 0 and global_step % save_steps == 0) or \
-                        global_step % (len(train_dataloader) // gradient_accumulation_steps) == 0:
+                        (save_steps > 0 and global_step % (len(train_dataloader) // gradient_accumulation_steps) == 0):
                     _output_dir = os.path.join(output_dir, "checkpoint-{}".format(global_step))
                     if not os.path.exists(_output_dir):
                         os.makedirs(_output_dir)

@@ -3,18 +3,19 @@ import os
 from pathlib import Path
 
 import torch
-from transformers import DistilBertTokenizer
+from transformers import BertTokenizer, RobertaTokenizer
 
 from task_2.library.evaluation import evaluate
-from task_2.library.model import DistilBertForCauseEffect
+from task_2.library.models.bert import BertForCauseEffect
+from task_2.library.models.roberta import RoBERTaForCauseEffect
 from task_2.library.preprocessing import load_and_cache_examples
 from task_2.library.training import train
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-MODEL_TYPE = "distilbert"
-MODEL_NAME_OR_PATH = "distilbert-base-uncased-distilled-squad"
+MODEL_TYPE = "roberta"
+MODEL_NAME_OR_PATH = "twmkn9/distilroberta-base-squad2"
 
 DO_TRAIN = True
 DO_EVAL = False
@@ -22,7 +23,7 @@ DO_EVAL = False
 DO_LOWER_CASE = True  # Set to False for case-sensitive models
 MAX_SEQ_LENGTH = 384
 DOC_STRIDE = 128
-OVERWRITE_CACHE = False
+OVERWRITE_CACHE = True
 # Training
 PER_GPU_BATCH_SIZE = 12
 GRADIENT_ACCUMULATION_STEPS = 1
@@ -36,7 +37,7 @@ MAX_ANSWER_LENGTH = 300
 
 TRAIN_FILE = Path("E:/Coding/finNLP/task_2/data/fnp2020-train.csv")
 PREDICT_FILE = Path("E:/Coding/finNLP/task_2/data/fnp2020-dev.csv")
-OUTPUT_DIR = 'E:/Coding/finNLP/task_2/output/'
+OUTPUT_DIR = 'E:/Coding/finNLP/task_2/output/' + MODEL_NAME_OR_PATH
 
 log_file = {'MODEL_TYPE': MODEL_TYPE,
             'MODEL_NAME_OR_PATH': MODEL_NAME_OR_PATH,
@@ -61,11 +62,11 @@ if __name__ == '__main__':
 
     # Training
     if DO_TRAIN:
-        tokenizer = DistilBertTokenizer.from_pretrained(MODEL_NAME_OR_PATH,
-                                                        do_lower_case=DO_LOWER_CASE,
-                                                        cache_dir=OUTPUT_DIR)
-        # ToDo: test loading the weights from the QA layer as well
-        model = DistilBertForCauseEffect.from_pretrained(MODEL_NAME_OR_PATH).to(device)
+
+        tokenizer = RobertaTokenizer.from_pretrained(MODEL_NAME_OR_PATH,
+                                                     do_lower_case=DO_LOWER_CASE,
+                                                     cache_dir=OUTPUT_DIR)
+        model = RoBERTaForCauseEffect.from_pretrained(MODEL_NAME_OR_PATH).to(device)
 
         train_dataset = load_and_cache_examples(TRAIN_FILE, MODEL_NAME_OR_PATH, tokenizer,
                                                 MAX_SEQ_LENGTH, DOC_STRIDE,
@@ -86,7 +87,7 @@ if __name__ == '__main__':
                                      num_train_epochs=NUM_TRAIN_EPOCHS,
                                      warmup_steps=WARMUP_STEPS,
                                      logging_steps=500,
-                                     save_steps=500,
+                                     save_steps=0,
                                      evaluate_during_training=True,
                                      max_seq_length=MAX_SEQ_LENGTH,
                                      doc_stride=DOC_STRIDE,
@@ -106,9 +107,9 @@ if __name__ == '__main__':
         logger.info("Saving final model to %s", OUTPUT_DIR)
 
     if DO_EVAL:
-        tokenizer = DistilBertTokenizer.from_pretrained(OUTPUT_DIR,
-                                                        do_lower_case=DO_LOWER_CASE)
-        model = DistilBertForCauseEffect.from_pretrained(OUTPUT_DIR).to(device)
+        tokenizer = RobertaTokenizer.from_pretrained(OUTPUT_DIR,
+                                                     do_lower_case=DO_LOWER_CASE)
+        model = RoBERTaForCauseEffect.from_pretrained(OUTPUT_DIR).to(device)
 
         result = evaluate(model, tokenizer, device, PREDICT_FILE, MODEL_TYPE, MODEL_NAME_OR_PATH,
                           MAX_SEQ_LENGTH, DOC_STRIDE, PER_GPU_EVAL_BATCH_SIZE, OUTPUT_DIR,
