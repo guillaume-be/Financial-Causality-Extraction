@@ -43,7 +43,7 @@ def to_list(tensor):
 
 def evaluate(model, tokenizer, device: torch.device, file_path: Path, model_type: str, model_name_or_path: str,
              max_seq_length: int, doc_stride: int, eval_batch_size: int, output_dir: str,
-             n_best_size: int, max_answer_length: int, do_lower_case: bool,
+             n_best_size: int, max_answer_length: int, do_lower_case: bool, sentence_boundary_heuristic: bool,
              verbose_logging: bool = False, overwrite_cache: bool = False, prefix=""):
     dataset, examples, features = load_and_cache_examples(file_path, model_name_or_path, tokenizer,
                                                           max_seq_length, doc_stride,
@@ -113,6 +113,7 @@ def evaluate(model, tokenizer, device: torch.device, file_path: Path, model_type
         output_nbest_file,
         verbose_logging,
         tokenizer,
+        sentence_boundary_heuristic
     )
 
     # Compute the F1 and exact scores.
@@ -212,8 +213,11 @@ _NbestPrediction = collections.namedtuple(
 )
 
 
-def filter_impossible_spans(features, unique_id_to_result: Dict,
-                            n_best_size: int, max_answer_length: int) -> List[_PrelimPrediction]:
+def filter_impossible_spans(features,
+                            unique_id_to_result: Dict,
+                            n_best_size: int,
+                            max_answer_length: int,
+                            sentence_boundary_heuristic: bool = False) -> List[_PrelimPrediction]:
     prelim_predictions = []
 
     for (feature_index, feature) in enumerate(features):
@@ -221,7 +225,7 @@ def filter_impossible_spans(features, unique_id_to_result: Dict,
         assert isinstance(feature, FinCausalFeatures)
         assert isinstance(result, FinCausalResult)
         # Heuristic: a effect of a cause cannot span across multiple sentences
-
+        sentence_offsets = [offset for offset in [feature.sentence_2_offset, feature.sentence_3_offset] if offset > 1]
         start_indexes_cause = _get_best_indexes(result.start_cause_logits, n_best_size)
         end_indexes_cause = _get_best_indexes(result.end_cause_logits, n_best_size)
         start_logits_cause = result.start_cause_logits
@@ -231,49 +235,65 @@ def filter_impossible_spans(features, unique_id_to_result: Dict,
         start_logits_effect = result.start_effect_logits
         end_logits_effect = result.end_effect_logits
 
-        for start_index_cause in start_indexes_cause:
-            for end_index_cause in end_indexes_cause:
-                for start_index_effect in start_indexes_effect:
-                    for end_index_effect in end_indexes_effect:
-
-                        if (start_index_cause <= start_index_effect) and (end_index_cause >= start_index_effect):
-                            continue
-                        if (start_index_effect <= start_index_cause) and (end_index_effect >= start_index_cause):
-                            continue
-                        if start_index_effect >= len(feature.tokens) or start_index_cause >= len(feature.tokens):
-                            continue
-                        if end_index_effect >= len(feature.tokens) or end_index_cause >= len(feature.tokens):
-                            continue
-                        if start_index_effect not in feature.token_to_orig_map or start_index_cause not in feature.token_to_orig_map:
-                            continue
-                        if end_index_effect not in feature.token_to_orig_map or end_index_cause not in feature.token_to_orig_map:
-                            continue
-                        if (not feature.token_is_max_context.get(start_index_effect, False)) or \
-                                (not feature.token_is_max_context.get(start_index_cause, False)):
-                            continue
-                        if end_index_cause < start_index_cause:
-                            continue
-                        if end_index_effect < start_index_effect:
-                            continue
-                        length_cause = end_index_cause - start_index_cause + 1
-                        length_effect = end_index_effect - start_index_effect + 1
-                        if length_cause > max_answer_length:
-                            continue
-                        if length_effect > max_answer_length:
-                            continue
-                        prelim_predictions.append(
-                            _PrelimPrediction(
-                                feature_index=feature_index,
-                                start_index_cause=start_index_cause,
-                                end_index_cause=end_index_cause,
-                                start_logit_cause=start_logits_cause[start_index_cause],
-                                end_logit_cause=end_logits_cause[end_index_cause],
-                                start_index_effect=start_index_effect,
-                                end_index_effect=end_index_effect,
-                                start_logit_effect=start_logits_effect[start_index_effect],
-                                end_logit_effect=end_logits_effect[end_index_effect]
-                            )
-                        )
+        for raw_start_index_cause in start_indexes_cause:
+            for raw_end_index_cause in end_indexes_cause:
+                cause_pairs = [(raw_start_index_cause, raw_end_index_cause)]
+                if len(sentence_offsets) > 0 and sentence_boundary_heuristic:
+                    for sentence_offset in sentence_offsets:
+                        if raw_start_index_cause < sentence_offset < raw_end_index_cause:
+                            cause_pairs = [(raw_start_index_cause, sentence_offset),
+                                           (sentence_offset + 1, raw_end_index_cause)]
+                for start_index_cause, end_index_cause in cause_pairs:
+                    for raw_start_index_effect in start_indexes_effect:
+                        for raw_end_index_effect in end_indexes_effect:
+                            effect_pairs = [(raw_start_index_effect, raw_end_index_effect)]
+                            if len(sentence_offsets) > 0 and sentence_boundary_heuristic:
+                                for sentence_offset in sentence_offsets:
+                                    if raw_start_index_effect < sentence_offset < raw_end_index_effect:
+                                        effect_pairs = [(raw_start_index_effect, sentence_offset),
+                                                        (sentence_offset + 1, raw_end_index_effect)]
+                            for start_index_effect, end_index_effect in effect_pairs:
+                                if (start_index_cause <= start_index_effect) and (
+                                        end_index_cause >= start_index_effect):
+                                    continue
+                                if (start_index_effect <= start_index_cause) and (
+                                        end_index_effect >= start_index_cause):
+                                    continue
+                                if start_index_effect >= len(feature.tokens) or start_index_cause >= len(
+                                        feature.tokens):
+                                    continue
+                                if end_index_effect >= len(feature.tokens) or end_index_cause >= len(feature.tokens):
+                                    continue
+                                if start_index_effect not in feature.token_to_orig_map or start_index_cause not in feature.token_to_orig_map:
+                                    continue
+                                if end_index_effect not in feature.token_to_orig_map or end_index_cause not in feature.token_to_orig_map:
+                                    continue
+                                if (not feature.token_is_max_context.get(start_index_effect, False)) or \
+                                        (not feature.token_is_max_context.get(start_index_cause, False)):
+                                    continue
+                                if end_index_cause < start_index_cause:
+                                    continue
+                                if end_index_effect < start_index_effect:
+                                    continue
+                                length_cause = end_index_cause - start_index_cause + 1
+                                length_effect = end_index_effect - start_index_effect + 1
+                                if length_cause > max_answer_length:
+                                    continue
+                                if length_effect > max_answer_length:
+                                    continue
+                                prelim_predictions.append(
+                                    _PrelimPrediction(
+                                        feature_index=feature_index,
+                                        start_index_cause=start_index_cause,
+                                        end_index_cause=end_index_cause,
+                                        start_logit_cause=start_logits_cause[start_index_cause],
+                                        end_logit_cause=end_logits_cause[end_index_cause],
+                                        start_index_effect=start_index_effect,
+                                        end_index_effect=end_index_effect,
+                                        start_logit_effect=start_logits_effect[start_index_effect],
+                                        end_logit_effect=end_logits_effect[end_index_effect]
+                                    )
+                                )
     return prelim_predictions
 
 
@@ -339,6 +359,7 @@ def compute_predictions_logits(
         output_nbest_file,
         verbose_logging,
         tokenizer,
+        sentence_boundary_heuristic
 ):
     """Write final predictions to the json file and log-odds of null if needed."""
     logger.info("Writing predictions to: %s" % output_prediction_file)
@@ -361,7 +382,8 @@ def compute_predictions_logits(
         prelim_predictions = filter_impossible_spans(features,
                                                      unique_id_to_result,
                                                      n_best_size,
-                                                     max_answer_length)
+                                                     max_answer_length,
+                                                     sentence_boundary_heuristic)
         prelim_predictions = sorted(prelim_predictions,
                                     key=lambda x: (x.start_logit_cause + x.end_logit_cause +
                                                    x.start_logit_effect + x.end_logit_effect),

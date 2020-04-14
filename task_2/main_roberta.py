@@ -17,8 +17,8 @@ logger = logging.getLogger(__name__)
 MODEL_TYPE = "roberta"
 MODEL_NAME_OR_PATH = "twmkn9/distilroberta-base-squad2"
 
-DO_TRAIN = True
-DO_EVAL = False
+DO_TRAIN = False
+DO_EVAL = True
 # Preprocessing
 DO_LOWER_CASE = True  # Set to False for case-sensitive models
 MAX_SEQ_LENGTH = 384
@@ -30,10 +30,12 @@ GRADIENT_ACCUMULATION_STEPS = 1
 WARMUP_STEPS = 20
 LEARNING_RATE = 3e-5
 NUM_TRAIN_EPOCHS = 3
+SAVE_MODEL = False
 # Evaluation
 PER_GPU_EVAL_BATCH_SIZE = 8
 N_BEST_SIZE = 20
 MAX_ANSWER_LENGTH = 300
+SENTENCE_BOUNDARY_HEURISTIC = False
 
 TRAIN_FILE = Path("E:/Coding/finNLP/task_2/data/fnp2020-train.csv")
 PREDICT_FILE = Path("E:/Coding/finNLP/task_2/data/fnp2020-dev.csv")
@@ -54,7 +56,8 @@ log_file = {'MODEL_TYPE': MODEL_TYPE,
             'NUM_TRAIN_EPOCHS': NUM_TRAIN_EPOCHS,
             'PER_GPU_EVAL_BATCH_SIZE': PER_GPU_EVAL_BATCH_SIZE,
             'N_BEST_SIZE': N_BEST_SIZE,
-            'MAX_ANSWER_LENGTH': MAX_ANSWER_LENGTH
+            'MAX_ANSWER_LENGTH': MAX_ANSWER_LENGTH,
+            'SENTENCE_BOUNDARY_HEURISTIC': SENTENCE_BOUNDARY_HEURISTIC
             }
 
 if __name__ == '__main__':
@@ -94,23 +97,37 @@ if __name__ == '__main__':
                                      eval_batch_size=PER_GPU_EVAL_BATCH_SIZE,
                                      n_best_size=N_BEST_SIZE,
                                      max_answer_length=MAX_ANSWER_LENGTH,
+                                     sentence_boundary_heuristic=SENTENCE_BOUNDARY_HEURISTIC,
                                      do_lower_case=DO_LOWER_CASE,
                                      learning_rate=LEARNING_RATE,
-                                     log_file=log_file)
+                                     log_file=log_file,
+                                     overwrite_cache=OVERWRITE_CACHE)
 
         if not os.path.exists(OUTPUT_DIR):
             os.makedirs(OUTPUT_DIR)
-        # Take care of distributed/parallel training
-        model_to_save = model.module if hasattr(model, "module") else model
-        model_to_save.save_pretrained(OUTPUT_DIR)
-        tokenizer.save_pretrained(OUTPUT_DIR)
-        logger.info("Saving final model to %s", OUTPUT_DIR)
+        if SAVE_MODEL:
+            model_to_save = model.module if hasattr(model, "module") else model
+            model_to_save.save_pretrained(OUTPUT_DIR)
+            tokenizer.save_pretrained(OUTPUT_DIR)
+            logger.info("Saving final model to %s", OUTPUT_DIR)
 
     if DO_EVAL:
         tokenizer = RobertaTokenizer.from_pretrained(OUTPUT_DIR,
                                                      do_lower_case=DO_LOWER_CASE)
         model = RoBERTaForCauseEffect.from_pretrained(OUTPUT_DIR).to(device)
 
-        result = evaluate(model, tokenizer, device, PREDICT_FILE, MODEL_TYPE, MODEL_NAME_OR_PATH,
-                          MAX_SEQ_LENGTH, DOC_STRIDE, PER_GPU_EVAL_BATCH_SIZE, OUTPUT_DIR,
-                          N_BEST_SIZE, MAX_ANSWER_LENGTH, DO_LOWER_CASE)
+        result = evaluate(model=model,
+                          tokenizer=tokenizer,
+                          device=device,
+                          file_path=PREDICT_FILE,
+                          model_type=MODEL_TYPE,
+                          model_name_or_path=MODEL_NAME_OR_PATH,
+                          max_seq_length=MAX_SEQ_LENGTH,
+                          doc_stride=DOC_STRIDE,
+                          eval_batch_size=PER_GPU_EVAL_BATCH_SIZE,
+                          output_dir=OUTPUT_DIR,
+                          n_best_size=N_BEST_SIZE,
+                          max_answer_length=MAX_ANSWER_LENGTH,
+                          do_lower_case=DO_LOWER_CASE,
+                          sentence_boundary_heuristic=SENTENCE_BOUNDARY_HEURISTIC,
+                          overwrite_cache=OVERWRITE_CACHE)

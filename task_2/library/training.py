@@ -35,8 +35,9 @@ def train(train_dataset, model, tokenizer, train_batch_size: int,
           device: torch.device, max_steps: Optional[int], gradient_accumulation_steps: int, num_train_epochs: int,
           warmup_steps: int, logging_steps: int, save_steps: int, evaluate_during_training: bool,
           max_seq_length: int, doc_stride: int, eval_batch_size: int,
-          n_best_size: int, max_answer_length: int, do_lower_case: bool,
-          learning_rate: float, weight_decay: float = 0.0, adam_epsilon: float = 1e-8, max_grad_norm: float = 1.0):
+          n_best_size: int, max_answer_length: int, sentence_boundary_heuristic: bool, do_lower_case: bool,
+          learning_rate: float, weight_decay: float = 0.0, adam_epsilon: float = 1e-8, max_grad_norm: float = 1.0,
+          overwrite_cache: bool = False):
     """ Train the model """
     tb_writer = SummaryWriter()
 
@@ -150,9 +151,21 @@ def train(train_dataset, model, tokenizer, train_batch_size: int,
                 if (logging_steps > 0 and global_step % logging_steps == 0) or \
                         global_step % (len(train_dataloader) // gradient_accumulation_steps) == 0:
                     if evaluate_during_training:
-                        metrics = evaluate(model, tokenizer, device, predict_file, model_type, model_name_or_path,
-                                           max_seq_length, doc_stride, eval_batch_size, output_dir,
-                                           n_best_size, max_answer_length, do_lower_case)
+                        metrics = evaluate(model=model,
+                                           tokenizer=tokenizer,
+                                           device=device,
+                                           file_path=predict_file,
+                                           model_type=model_type,
+                                           model_name_or_path=model_name_or_path,
+                                           max_seq_length=max_seq_length,
+                                           doc_stride=doc_stride,
+                                           eval_batch_size=eval_batch_size,
+                                           output_dir=output_dir,
+                                           n_best_size=n_best_size,
+                                           max_answer_length=max_answer_length,
+                                           do_lower_case=do_lower_case,
+                                           sentence_boundary_heuristic=sentence_boundary_heuristic,
+                                           overwrite_cache=overwrite_cache)
                         log_file[f'step_{global_step}'] = metrics
                     tb_writer.add_scalar("lr", scheduler.get_last_lr()[0], global_step)
                     tb_writer.add_scalar("loss", (tr_loss - logging_loss) / logging_steps, global_step)
