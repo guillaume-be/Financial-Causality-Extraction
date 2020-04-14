@@ -44,10 +44,11 @@ def to_list(tensor):
 def evaluate(model, tokenizer, device: torch.device, file_path: Path, model_type: str, model_name_or_path: str,
              max_seq_length: int, doc_stride: int, eval_batch_size: int, output_dir: str,
              n_best_size: int, max_answer_length: int, do_lower_case: bool,
-             verbose_logging: bool = False, prefix=""):
+             verbose_logging: bool = False, overwrite_cache: bool = False, prefix=""):
     dataset, examples, features = load_and_cache_examples(file_path, model_name_or_path, tokenizer,
                                                           max_seq_length, doc_stride,
-                                                          output_examples=True, evaluate=True)
+                                                          output_examples=True, evaluate=True,
+                                                          overwrite_cache=overwrite_cache)
 
     if not os.path.exists(output_dir):
         os.makedirs(output_dir)
@@ -115,7 +116,16 @@ def evaluate(model, tokenizer, device: torch.device, file_path: Path, model_type
     )
 
     # Compute the F1 and exact scores.
-    results = compute_metrics(examples, predictions)
+    results, correct, wrong = compute_metrics(examples, predictions)
+    output_prediction_file_correct = os.path.join(output_dir, "predictions_{}_correct.json".format(prefix))
+    output_prediction_file_wrong = os.path.join(output_dir, "predictions_{}_wrong.json".format(prefix))
+
+    with open(output_prediction_file_correct, "w") as writer:
+        writer.write(json.dumps(correct, indent=4) + "\n")
+
+    with open(output_prediction_file_wrong, "w") as writer:
+        writer.write(json.dumps(wrong, indent=4) + "\n")
+
     return results
 
 
@@ -134,19 +144,36 @@ def compute_metrics(examples: List[FinCausalExample], predictions: collections.O
     hometags_true = make_causal_input(y_true)
     hometags_pred = make_causal_input(y_pred)
     labels = {"C": 1, "E": 2, "_": 0}
-    y_true = np.array([labels[token[1]] for row in hometags_true for token in row])
-    y_pred = np.array([labels[token[1]] for row in hometags_pred for token in row])
-    # print('************************ classification report ***************************', '\t')
-    # print(classification_report(
-    #     y_true, y_pred,
-    #     target_names=["_", "C", "E"]))
+    y_true_flat = np.array([labels[token[1]] for row in hometags_true for token in row])
+    y_pred_flat = np.array([labels[token[1]] for row in hometags_pred for token in row])
+    print('************** Identify correct and wrong sentences **************', '\t')
+    all_correct = []
+    all_wrong = []
+    for y_true_ex, y_pred_ex, true_tags, pred_tags in zip(y_true, y_pred, hometags_true, hometags_pred):
+        y_true_tags = np.array([labels[token[1]] for token in true_tags])
+        y_pred_tags = np.array([labels[token[1]] for token in pred_tags])
+        if np.array_equal(y_true_tags, y_pred_tags):
+            all_correct.append({'text': y_true_ex['sentence'],
+                                'cause_true': y_true_ex['cause'],
+                                'effect_true': y_true_ex['effect'],
+                                'cause_pred': y_pred_ex['cause'],
+                                'effect_pred': y_pred_ex['effect']
+                                })
+        else:
+            all_wrong.append({'text': y_true_ex['sentence'],
+                              'cause_true': y_true_ex['cause'],
+                              'effect_true': y_true_ex['effect'],
+                              'cause_pred': y_pred_ex['cause'],
+                              'effect_pred': y_pred_ex['effect']
+                              })
+    print(f'Ratio of all correct examples: {len(all_correct)}/{len(all_correct) + len(all_wrong)}')
 
     print('************************ tasks metrics ***************************', '\t')
 
-    F1metrics = precision_recall_fscore_support(y_true, y_pred, average='weighted')
+    F1metrics = precision_recall_fscore_support(y_true_flat, y_pred_flat, average='weighted')
 
     nl = []
-    for yt, yp in zip(y_true, y_pred):
+    for yt, yp in zip(y_true_flat, y_pred_flat):
         d_ = dict()
         d_["truth"] = yt
         d_["pred"] = yp
@@ -160,11 +187,12 @@ def compute_metrics(examples: List[FinCausalExample], predictions: collections.O
     print('Recall: ', F1metrics[0])
     print('exact match: ', sum([1 for i in nl if i["diverge"] == 0]), 'over', len(nl), ' total sentences)')
     return {
-        'F1score:': F1metrics[2],
-        'Precision: ': F1metrics[1],
-        'Recall: ': F1metrics[0],
-        'exact match: ': str(sum([1 for i in nl if i["diverge"] == 0])) + ' over ' + str(len(nl)) + ' total sentences)'
-    }
+               'F1score:': F1metrics[2],
+               'Precision: ': F1metrics[1],
+               'Recall: ': F1metrics[0],
+               'exact match: ': str(sum([1 for i in nl if i["diverge"] == 0])) + ' over ' + str(
+                   len(nl)) + ' total sentences)'
+           }, all_correct, all_wrong
 
 
 class SpanType(Enum):
@@ -190,7 +218,10 @@ def filter_impossible_spans(features, unique_id_to_result: Dict,
 
     for (feature_index, feature) in enumerate(features):
         result = unique_id_to_result[feature.unique_id]
+        assert isinstance(feature, FinCausalFeatures)
         assert isinstance(result, FinCausalResult)
+        # Heuristic: a effect of a cause cannot span across multiple sentences
+
         start_indexes_cause = _get_best_indexes(result.start_cause_logits, n_best_size)
         end_indexes_cause = _get_best_indexes(result.end_cause_logits, n_best_size)
         start_logits_cause = result.start_cause_logits
@@ -201,9 +232,10 @@ def filter_impossible_spans(features, unique_id_to_result: Dict,
         end_logits_effect = result.end_effect_logits
 
         for start_index_cause in start_indexes_cause:
-            for start_index_effect in start_indexes_effect:
-                for end_index_cause in end_indexes_cause:
+            for end_index_cause in end_indexes_cause:
+                for start_index_effect in start_indexes_effect:
                     for end_index_effect in end_indexes_effect:
+
                         if (start_index_cause <= start_index_effect) and (end_index_cause >= start_index_effect):
                             continue
                         if (start_index_effect <= start_index_cause) and (end_index_effect >= start_index_cause):
@@ -229,7 +261,6 @@ def filter_impossible_spans(features, unique_id_to_result: Dict,
                             continue
                         if length_effect > max_answer_length:
                             continue
-
                         prelim_predictions.append(
                             _PrelimPrediction(
                                 feature_index=feature_index,
@@ -290,10 +321,10 @@ def get_predictions(preliminary_predictions: List[_PrelimPrediction], n_best_siz
             seen_predictions_cause[final_text_effect] = True
 
         nbest.append(
-            _NbestPrediction(text_cause=final_text_cause, start_logit_cause=prediction.start_index_cause,
-                             end_logit_cause=prediction.end_index_cause,
-                             text_effect=final_text_effect, start_logit_effect=prediction.start_index_effect,
-                             end_logit_effect=prediction.end_index_effect))
+            _NbestPrediction(text_cause=final_text_cause, start_logit_cause=prediction.start_logit_cause,
+                             end_logit_cause=prediction.end_logit_cause,
+                             text_effect=final_text_effect, start_logit_effect=prediction.start_logit_effect,
+                             end_logit_effect=prediction.end_logit_effect))
     return nbest
 
 

@@ -1,5 +1,7 @@
 from typing import Optional
 
+import pandas as pd
+
 
 class FinCausalExample:
 
@@ -9,6 +11,8 @@ class FinCausalExample:
             context_text: str,
             cause_text: str,
             effect_text: str,
+            offset_sentence_2: int,
+            offset_sentence_3: int,
             cause_start_position_character: Optional[int],
             cause_end_position_character: Optional[int],
             effect_start_position_character: Optional[int],
@@ -55,6 +59,14 @@ class FinCausalExample:
             self.end_effect_position = char_to_word_offset[
                 min(effect_start_position_character + len(effect_text) - 1, len(char_to_word_offset) - 1)
             ]
+        if pd.notna(offset_sentence_2):
+            self.offset_sentence_2 = char_to_word_offset[int(offset_sentence_2)]
+        else:
+            self.offset_sentence_2 = 0
+        if pd.notna(offset_sentence_3):
+            self.offset_sentence_3 = char_to_word_offset[int(offset_sentence_3)]
+        else:
+            self.offset_sentence_3 = 0
 
 
 class FinCausalFeatures:
@@ -77,6 +89,8 @@ class FinCausalFeatures:
             cause_end_position,
             effect_start_position,
             effect_end_position,
+            sentence_2_offset,
+            sentence_3_offset,
             is_impossible,
     ):
         self.input_ids = input_ids
@@ -97,6 +111,10 @@ class FinCausalFeatures:
         self.cause_end_position = cause_end_position
         self.effect_start_position = effect_start_position
         self.effect_end_position = effect_end_position
+
+        self.sentence_2_offset = sentence_2_offset
+        self.sentence_3_offset = sentence_3_offset
+
         self.is_impossible = is_impossible
 
 

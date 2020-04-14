@@ -16,8 +16,8 @@ logger = logging.getLogger(__name__)
 MODEL_TYPE = "distilbert"
 MODEL_NAME_OR_PATH = "distilbert-base-uncased-distilled-squad"
 
-DO_TRAIN = True
-DO_EVAL = False
+DO_TRAIN = False
+DO_EVAL = True
 # Preprocessing
 DO_LOWER_CASE = True  # Set to False for case-sensitive models
 MAX_SEQ_LENGTH = 512
@@ -29,9 +29,10 @@ GRADIENT_ACCUMULATION_STEPS = 1
 WARMUP_STEPS = 20
 LEARNING_RATE = 3e-5
 NUM_TRAIN_EPOCHS = 5
+SAVE_MODEL = False
 # Evaluation
 PER_GPU_EVAL_BATCH_SIZE = 8
-N_BEST_SIZE = 20
+N_BEST_SIZE = 10
 MAX_ANSWER_LENGTH = 300
 
 TRAIN_FILE = Path("E:/Coding/finNLP/task_2/data/fnp2020-train.csv")
@@ -99,10 +100,11 @@ if __name__ == '__main__':
         if not os.path.exists(OUTPUT_DIR):
             os.makedirs(OUTPUT_DIR)
         # Take care of distributed/parallel training
-        model_to_save = model.module if hasattr(model, "module") else model
-        model_to_save.save_pretrained(OUTPUT_DIR)
-        tokenizer.save_pretrained(OUTPUT_DIR)
-        logger.info("Saving final model to %s", OUTPUT_DIR)
+        if SAVE_MODEL:
+            model_to_save = model.module if hasattr(model, "module") else model
+            model_to_save.save_pretrained(OUTPUT_DIR)
+            tokenizer.save_pretrained(OUTPUT_DIR)
+            logger.info("Saving final model to %s", OUTPUT_DIR)
 
     if DO_EVAL:
         tokenizer = DistilBertTokenizer.from_pretrained(OUTPUT_DIR,
@@ -111,4 +113,4 @@ if __name__ == '__main__':
 
         result = evaluate(model, tokenizer, device, PREDICT_FILE, MODEL_TYPE, MODEL_NAME_OR_PATH,
                           MAX_SEQ_LENGTH, DOC_STRIDE, PER_GPU_EVAL_BATCH_SIZE, OUTPUT_DIR,
-                          N_BEST_SIZE, MAX_ANSWER_LENGTH, DO_LOWER_CASE)
+                          N_BEST_SIZE, MAX_ANSWER_LENGTH, DO_LOWER_CASE, overwrite_cache=OVERWRITE_CACHE)

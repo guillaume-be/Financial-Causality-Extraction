@@ -101,12 +101,16 @@ class FinCausalProcessor:
             cause_end_position_character = entry.Cause_End
             effect_start_position_character = entry.Effect_Start
             effect_end_position_character = entry.Effect_End
+            offset_sentence_2 = entry.Offset_Sentence2
+            offset_sentence_3 = entry.Offset_Sentence3
 
             example = FinCausalExample(
                 example_id,
                 context_text,
                 cause_text,
                 effect_text,
+                offset_sentence_2,
+                offset_sentence_3,
                 cause_start_position_character,
                 cause_end_position_character,
                 effect_start_position_character,
@@ -218,6 +222,14 @@ def fincausal_convert_example_to_features(example: FinCausalExample,
         (tok_effect_start_position, tok_effect_end_position) = _improve_answer_span(
             all_doc_tokens, tok_effect_start_position, tok_effect_end_position, tokenizer, example.effect_text
         )
+    if example.offset_sentence_2 > 0:
+        tok_sentence_2_offset = orig_to_tok_index[example.offset_sentence_2 + 1] - 1
+    else:
+        tok_sentence_2_offset = 0
+    if example.offset_sentence_3 > 0:
+        tok_sentence_3_offset = orig_to_tok_index[example.offset_sentence_3 + 1] - 1
+    else:
+        tok_sentence_3_offset = 0
 
     spans = []
 
@@ -298,13 +310,18 @@ def fincausal_convert_example_to_features(example: FinCausalExample,
         cause_end_position = 0
         effect_start_position = 0
         effect_end_position = 0
+        doc_start = span["start"]
+        doc_end = span["start"] + span["length"] - 1
+        out_of_span = False
+        if tokenizer.padding_side == "left":
+            doc_offset = 0
+        else:
+            doc_offset = sequence_added_tokens
+        sentence_2_offset = tok_sentence_2_offset - doc_start + doc_offset
+        sentence_3_offset = tok_sentence_3_offset - doc_start + doc_offset
         if is_training:
             # For training, if our document chunk does not contain an annotation
             # we throw it out, since there is nothing to predict.
-            doc_start = span["start"]
-            doc_end = span["start"] + span["length"] - 1
-            out_of_span = False
-
             if not (tok_cause_start_position >= doc_start
                     and tok_cause_end_position <= doc_end
                     and tok_effect_start_position >= doc_start
@@ -318,11 +335,6 @@ def fincausal_convert_example_to_features(example: FinCausalExample,
                 effect_end_position = cls_index
                 span_is_impossible = True
             else:
-                if tokenizer.padding_side == "left":
-                    doc_offset = 0
-                else:
-                    doc_offset = sequence_added_tokens
-
                 cause_start_position = tok_cause_start_position - doc_start + doc_offset
                 cause_end_position = tok_cause_end_position - doc_start + doc_offset
                 effect_start_position = tok_effect_start_position - doc_start + doc_offset
@@ -346,6 +358,8 @@ def fincausal_convert_example_to_features(example: FinCausalExample,
                 cause_end_position=cause_end_position,
                 effect_start_position=effect_start_position,
                 effect_end_position=effect_end_position,
+                sentence_2_offset=sentence_2_offset,
+                sentence_3_offset=sentence_3_offset,
                 is_impossible=span_is_impossible,
             )
         )
