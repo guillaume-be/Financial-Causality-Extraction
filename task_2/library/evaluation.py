@@ -43,7 +43,8 @@ def to_list(tensor):
 
 def evaluate(model, tokenizer, device: torch.device, file_path: Path, model_type: str, model_name_or_path: str,
              max_seq_length: int, doc_stride: int, eval_batch_size: int, output_dir: str,
-             n_best_size: int, max_answer_length: int, do_lower_case: bool, sentence_boundary_heuristic: bool,
+             n_best_size: int, max_answer_length: int, do_lower_case: bool,
+             sentence_boundary_heuristic: bool, full_sentence_heuristic: bool, shared_sentence_heuristic: bool,
              verbose_logging: bool = False, overwrite_cache: bool = False, prefix=""):
     dataset, examples, features = load_and_cache_examples(file_path, model_name_or_path, tokenizer,
                                                           max_seq_length, doc_stride,
@@ -113,7 +114,9 @@ def evaluate(model, tokenizer, device: torch.device, file_path: Path, model_type
         output_nbest_file,
         verbose_logging,
         tokenizer,
-        sentence_boundary_heuristic
+        sentence_boundary_heuristic,
+        full_sentence_heuristic,
+        shared_sentence_heuristic
     )
 
     # Compute the F1 and exact scores.
@@ -217,15 +220,18 @@ def filter_impossible_spans(features,
                             unique_id_to_result: Dict,
                             n_best_size: int,
                             max_answer_length: int,
-                            sentence_boundary_heuristic: bool = False) -> List[_PrelimPrediction]:
+                            sentence_boundary_heuristic: bool = False,
+                            full_sentence_heuristic: bool = False,
+                            shared_sentence_heuristic: bool = False
+                            ) -> List[_PrelimPrediction]:
     prelim_predictions = []
 
     for (feature_index, feature) in enumerate(features):
         result = unique_id_to_result[feature.unique_id]
         assert isinstance(feature, FinCausalFeatures)
         assert isinstance(result, FinCausalResult)
-        # Heuristic: a effect of a cause cannot span across multiple sentences
-        sentence_offsets = [offset for offset in [feature.sentence_2_offset, feature.sentence_3_offset] if offset > 1]
+        sentence_offsets = [offset for offset in [feature.sentence_2_offset, feature.sentence_3_offset] if
+                            offset > 1]
         start_indexes_cause = _get_best_indexes(result.start_cause_logits, n_best_size)
         end_indexes_cause = _get_best_indexes(result.end_cause_logits, n_best_size)
         start_logits_cause = result.start_cause_logits
@@ -238,6 +244,7 @@ def filter_impossible_spans(features,
         for raw_start_index_cause in start_indexes_cause:
             for raw_end_index_cause in end_indexes_cause:
                 cause_pairs = [(raw_start_index_cause, raw_end_index_cause)]
+                # Heuristic: a effect of a cause cannot span across multiple sentences
                 if len(sentence_offsets) > 0 and sentence_boundary_heuristic:
                     for sentence_offset in sentence_offsets:
                         if raw_start_index_cause < sentence_offset < raw_end_index_cause:
@@ -247,6 +254,7 @@ def filter_impossible_spans(features,
                     for raw_start_index_effect in start_indexes_effect:
                         for raw_end_index_effect in end_indexes_effect:
                             effect_pairs = [(raw_start_index_effect, raw_end_index_effect)]
+                            # Heuristic: a effect of a cause cannot span across multiple sentences
                             if len(sentence_offsets) > 0 and sentence_boundary_heuristic:
                                 for sentence_offset in sentence_offsets:
                                     if raw_start_index_effect < sentence_offset < raw_end_index_effect:
@@ -281,6 +289,49 @@ def filter_impossible_spans(features,
                                     continue
                                 if length_effect > max_answer_length:
                                     continue
+
+                                # Heuristics extending the prediction spans
+                                if full_sentence_heuristic or shared_sentence_heuristic:
+                                    num_tokens = len(feature.tokens)
+                                    all_sentence_offsets = [1] + [offset + 1 for offset in sentence_offsets] + [num_tokens - 1]
+                                    cause_sentences = []
+                                    effect_sentences = []
+                                    for sentence_idx in range(len(all_sentence_offsets) - 1):
+                                        sentence_start, sentence_end = all_sentence_offsets[sentence_idx], \
+                                                                       all_sentence_offsets[sentence_idx + 1]
+                                        if sentence_start <= start_index_cause < sentence_end:
+                                            cause_sentences.append(sentence_idx)
+                                        if sentence_start <= start_index_effect < sentence_end:
+                                            effect_sentences.append(sentence_idx)
+
+                                    # Heuristic (first rule): if a sentence contains only 1 clause the clause is
+                                    # extended to the entire sentence.
+                                    if set(cause_sentences).isdisjoint(set(effect_sentences)) \
+                                            and full_sentence_heuristic:
+                                        start_index_cause = min(
+                                            [all_sentence_offsets[sent] for sent in cause_sentences])
+                                        end_index_cause = max(
+                                            [all_sentence_offsets[sent + 1] - 1 for sent in cause_sentences])
+                                        start_index_effect = min(
+                                            [all_sentence_offsets[sent] for sent in effect_sentences])
+                                        end_index_effect = max(
+                                            [all_sentence_offsets[sent + 1] - 1 for sent in effect_sentences])
+                                    # Heuristic (third rule): if a sentence contains only 2 clauses the span is
+                                    # extended as much as possible, prioritizing the cause.
+                                    if not set(cause_sentences).isdisjoint(set(effect_sentences)) \
+                                            and shared_sentence_heuristic \
+                                            and len(cause_sentences) == 1 and len(effect_sentences):
+                                        if start_index_cause < start_index_effect:
+                                            start_index_cause = min(
+                                                [all_sentence_offsets[sent] for sent in cause_sentences])
+                                            end_index_effect = max(
+                                                [all_sentence_offsets[sent + 1] - 1 for sent in effect_sentences])
+                                        else:
+                                            start_index_effect = min(
+                                                [all_sentence_offsets[sent] for sent in effect_sentences])
+                                            end_index_cause = max(
+                                                [all_sentence_offsets[sent + 1] - 1 for sent in cause_sentences])
+
                                 prelim_predictions.append(
                                     _PrelimPrediction(
                                         feature_index=feature_index,
@@ -359,7 +410,9 @@ def compute_predictions_logits(
         output_nbest_file,
         verbose_logging,
         tokenizer,
-        sentence_boundary_heuristic
+        sentence_boundary_heuristic,
+        full_sentence_heuristic,
+        shared_sentence_heuristic
 ):
     """Write final predictions to the json file and log-odds of null if needed."""
     logger.info("Writing predictions to: %s" % output_prediction_file)
@@ -383,7 +436,9 @@ def compute_predictions_logits(
                                                      unique_id_to_result,
                                                      n_best_size,
                                                      max_answer_length,
-                                                     sentence_boundary_heuristic)
+                                                     sentence_boundary_heuristic,
+                                                     full_sentence_heuristic,
+                                                     shared_sentence_heuristic)
         prelim_predictions = sorted(prelim_predictions,
                                     key=lambda x: (x.start_logit_cause + x.end_logit_cause +
                                                    x.start_logit_effect + x.end_logit_effect),

@@ -35,7 +35,9 @@ def train(train_dataset, model, tokenizer, train_batch_size: int,
           device: torch.device, max_steps: Optional[int], gradient_accumulation_steps: int, num_train_epochs: int,
           warmup_steps: int, logging_steps: int, save_steps: int, evaluate_during_training: bool,
           max_seq_length: int, doc_stride: int, eval_batch_size: int,
-          n_best_size: int, max_answer_length: int, sentence_boundary_heuristic: bool, do_lower_case: bool,
+          n_best_size: int, max_answer_length: int,
+          sentence_boundary_heuristic: bool, full_sentence_heuristic: bool, shared_sentence_heuristic: bool,
+          do_lower_case: bool,
           learning_rate: float, weight_decay: float = 0.0, adam_epsilon: float = 1e-8, max_grad_norm: float = 1.0,
           overwrite_cache: bool = False):
     """ Train the model """
@@ -165,6 +167,8 @@ def train(train_dataset, model, tokenizer, train_batch_size: int,
                                            max_answer_length=max_answer_length,
                                            do_lower_case=do_lower_case,
                                            sentence_boundary_heuristic=sentence_boundary_heuristic,
+                                           full_sentence_heuristic=full_sentence_heuristic,
+                                           shared_sentence_heuristic=shared_sentence_heuristic,
                                            overwrite_cache=overwrite_cache)
                         log_file[f'step_{global_step}'] = metrics
                     tb_writer.add_scalar("lr", scheduler.get_last_lr()[0], global_step)

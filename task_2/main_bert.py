@@ -35,6 +35,8 @@ PER_GPU_EVAL_BATCH_SIZE = 8
 N_BEST_SIZE = 20
 MAX_ANSWER_LENGTH = 300
 SENTENCE_BOUNDARY_HEURISTIC = False
+FULL_SENTENCE_HEURISTIC = False
+SHARED_SENTENCE_HEURISTIC = False
 
 TRAIN_FILE = Path("E:/Coding/finNLP/task_2/data/fnp2020-train.csv")
 PREDICT_FILE = Path("E:/Coding/finNLP/task_2/data/fnp2020-dev.csv")
@@ -56,7 +58,9 @@ log_file = {'MODEL_TYPE': MODEL_TYPE,
             'PER_GPU_EVAL_BATCH_SIZE': PER_GPU_EVAL_BATCH_SIZE,
             'N_BEST_SIZE': N_BEST_SIZE,
             'MAX_ANSWER_LENGTH': MAX_ANSWER_LENGTH,
-            'SENTENCE_BOUNDARY_HEURISTIC': SENTENCE_BOUNDARY_HEURISTIC
+            'SENTENCE_BOUNDARY_HEURISTIC': SENTENCE_BOUNDARY_HEURISTIC,
+            'FULL_SENTENCE_HEURISTIC': FULL_SENTENCE_HEURISTIC,
+            'SHARED_SENTENCE_HEURISTIC': SHARED_SENTENCE_HEURISTIC
             }
 
 if __name__ == '__main__':
@@ -97,6 +101,8 @@ if __name__ == '__main__':
                                      n_best_size=N_BEST_SIZE,
                                      max_answer_length=MAX_ANSWER_LENGTH,
                                      sentence_boundary_heuristic=SENTENCE_BOUNDARY_HEURISTIC,
+                                     full_sentence_heuristic=FULL_SENTENCE_HEURISTIC,
+                                     shared_sentence_heuristic=SHARED_SENTENCE_HEURISTIC,
                                      do_lower_case=DO_LOWER_CASE,
                                      learning_rate=LEARNING_RATE,
                                      log_file=log_file,
@@ -129,4 +135,6 @@ if __name__ == '__main__':
                           max_answer_length=MAX_ANSWER_LENGTH,
                           do_lower_case=DO_LOWER_CASE,
                           sentence_boundary_heuristic=SENTENCE_BOUNDARY_HEURISTIC,
+                          full_sentence_heuristic=FULL_SENTENCE_HEURISTIC,
+                          shared_sentence_heuristic=SHARED_SENTENCE_HEURISTIC,
                           overwrite_cache=OVERWRITE_CACHE)
