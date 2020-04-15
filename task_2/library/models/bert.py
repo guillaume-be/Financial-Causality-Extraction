@@ -62,7 +62,7 @@ class BertForCauseEffect(BertPreTrainedModel):
             end_cause_loss = loss_fct(end_cause_logits, end_cause_positions)
             start_effect_loss = loss_fct(start_effect_logits, start_effect_positions)
             end_effect_loss = loss_fct(end_effect_logits, end_effect_positions)
-            total_loss = (start_cause_loss + end_cause_loss + start_effect_loss + end_effect_loss) / 2
+            total_loss = (start_cause_loss + end_cause_loss + start_effect_loss + end_effect_loss) / 4
             outputs = (total_loss,) + outputs
 
         return outputs  # (loss), start_cause_logits, end_cause_logits, start_effect_logits, end_effect_logits(hidden_states), (attentions)

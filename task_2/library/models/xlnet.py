@@ -1,51 +1,62 @@
 from torch import nn
-from transformers import BertPreTrainedModel, RobertaModel
+from torch.nn import CrossEntropyLoss
+from transformers import XLNetPreTrainedModel, XLNetModel
 
 
-class RoBERTaForCauseEffect(BertPreTrainedModel):
+class XLNetForCauseEffect(XLNetPreTrainedModel):
     def __init__(self, config):
         super().__init__(config)
+        self.num_labels = config.num_labels
 
-        self.roberta = RobertaModel(config)
+        self.transformer = XLNetModel(config)
         self.cause_outputs = nn.Linear(config.hidden_size, config.num_labels)
         self.effect_outputs = nn.Linear(config.hidden_size, config.num_labels)
-        assert config.num_labels == 2
         self.init_weights()
 
     def forward(
             self,
             input_ids=None,
             attention_mask=None,
+            mems=None,
+            perm_mask=None,
+            target_mapping=None,
             token_type_ids=None,
-            position_ids=None,
+            input_mask=None,
             head_mask=None,
             inputs_embeds=None,
+            use_cache=True,
             start_cause_positions=None,
             end_cause_positions=None,
             start_effect_positions=None,
             end_effect_positions=None,
     ):
-        bert_output = self.roberta(
-            input_ids=input_ids,
+
+        outputs = self.transformer(
+            input_ids,
             attention_mask=attention_mask,
+            mems=mems,
+            perm_mask=perm_mask,
+            target_mapping=target_mapping,
             token_type_ids=token_type_ids,
-            position_ids=position_ids,
+            input_mask=input_mask,
             head_mask=head_mask,
-            inputs_embeds=inputs_embeds
+            inputs_embeds=inputs_embeds,
+            use_cache=use_cache,
         )
-        hidden_states = bert_output[0]  # (bs, max_query_len, dim)
-        cause_logits = self.cause_outputs(hidden_states)  # (bs, max_query_len, 2)
-        effect_logits = self.effect_outputs(hidden_states)  # (bs, max_query_len, 2)
+
+        sequence_output = outputs[0]
+
+        cause_logits = self.cause_outputs(sequence_output)
         start_cause_logits, end_cause_logits = cause_logits.split(1, dim=-1)
+        start_cause_logits = start_cause_logits.squeeze(-1)
+        end_cause_logits = end_cause_logits.squeeze(-1)
+
+        effect_logits = self.effect_outputs(sequence_output)
         start_effect_logits, end_effect_logits = effect_logits.split(1, dim=-1)
+        start_effect_logits = start_effect_logits.squeeze(-1)
+        end_effect_logits = end_effect_logits.squeeze(-1)
 
-        start_cause_logits = start_cause_logits.squeeze(-1)  # (bs, max_query_len)
-        end_cause_logits = end_cause_logits.squeeze(-1)  # (bs, max_query_len)
-        start_effect_logits = start_effect_logits.squeeze(-1)  # (bs, max_query_len)
-        end_effect_logits = end_effect_logits.squeeze(-1)  # (bs, max_query_len)
-
-        outputs = (start_cause_logits, end_cause_logits, start_effect_logits, end_effect_logits,) \
-                  + bert_output[2:]
+        outputs = (start_cause_logits, end_cause_logits, start_effect_logits, end_effect_logits,) + outputs[2:]
         if start_cause_positions is not None \
                 and end_cause_positions is not None \
                 and start_effect_positions is not None \
@@ -57,7 +68,7 @@ class RoBERTaForCauseEffect(BertPreTrainedModel):
             start_effect_positions.clamp_(0, ignored_index)
             end_effect_positions.clamp_(0, ignored_index)
 
-            loss_fct = nn.CrossEntropyLoss(ignore_index=ignored_index)
+            loss_fct = CrossEntropyLoss(ignore_index=ignored_index)
             start_cause_loss = loss_fct(start_cause_logits, start_cause_positions)
             end_cause_loss = loss_fct(end_cause_logits, end_cause_positions)
             start_effect_loss = loss_fct(start_effect_logits, start_effect_positions)
@@ -65,4 +76,4 @@ class RoBERTaForCauseEffect(BertPreTrainedModel):
             total_loss = (start_cause_loss + end_cause_loss + start_effect_loss + end_effect_loss) / 4
             outputs = (total_loss,) + outputs
 
-        return outputs  # (loss), start_cause_logits, end_cause_logits, start_effect_logits, end_effect_logits(hidden_states), (attentions)
+        return outputs  # (loss), start_logits, end_logits, (mems), (hidden_states), (attentions)

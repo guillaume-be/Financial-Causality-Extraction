@@ -3,29 +3,29 @@ import os
 from pathlib import Path
 
 import torch
-from transformers import DistilBertTokenizer
+from transformers import XLNetTokenizer
 
 from task_2.library.evaluation import evaluate
-from task_2.library.models.distilbert import DistilBertForCauseEffect
+from task_2.library.models.xlnet import XLNetForCauseEffect
 from task_2.library.preprocessing import load_and_cache_examples
 from task_2.library.training import train
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-MODEL_TYPE = "distilbert"
-MODEL_NAME_OR_PATH = "distilbert-base-uncased-distilled-squad"
+MODEL_TYPE = "xlnet"
+MODEL_NAME_OR_PATH = "xlnet-base-cased"
 
 DO_TRAIN = True
 DO_EVAL = True
 # Preprocessing
-DO_LOWER_CASE = True  # Set to False for case-sensitive models
+DO_LOWER_CASE = False  # Set to False for case-sensitive models
 MAX_SEQ_LENGTH = 512
 DOC_STRIDE = 128
 OVERWRITE_CACHE = True
 # Training
-PER_GPU_BATCH_SIZE = 12
-GRADIENT_ACCUMULATION_STEPS = 1
+PER_GPU_BATCH_SIZE = 3
+GRADIENT_ACCUMULATION_STEPS = 4
 WARMUP_STEPS = 20
 LEARNING_RATE = 3e-5
 NUM_TRAIN_EPOCHS = 5
@@ -68,10 +68,10 @@ if __name__ == '__main__':
 
     # Training
     if DO_TRAIN:
-        tokenizer = DistilBertTokenizer.from_pretrained(MODEL_NAME_OR_PATH,
-                                                        do_lower_case=DO_LOWER_CASE,
-                                                        cache_dir=OUTPUT_DIR)
-        model: DistilBertForCauseEffect = DistilBertForCauseEffect.from_pretrained(MODEL_NAME_OR_PATH).to(device)
+        tokenizer = XLNetTokenizer.from_pretrained(MODEL_NAME_OR_PATH,
+                                                   do_lower_case=DO_LOWER_CASE,
+                                                   cache_dir=OUTPUT_DIR)
+        model: XLNetForCauseEffect = XLNetForCauseEffect.from_pretrained(MODEL_NAME_OR_PATH).to(device)
 
         train_dataset = load_and_cache_examples(TRAIN_FILE, MODEL_NAME_OR_PATH, tokenizer,
                                                 MAX_SEQ_LENGTH, DOC_STRIDE,
@@ -116,9 +116,9 @@ if __name__ == '__main__':
             logger.info("Saving final model to %s", OUTPUT_DIR)
 
     if DO_EVAL:
-        tokenizer = DistilBertTokenizer.from_pretrained(OUTPUT_DIR,
-                                                        do_lower_case=DO_LOWER_CASE)
-        model = DistilBertForCauseEffect.from_pretrained(OUTPUT_DIR).to(device)
+        tokenizer = XLNetTokenizer.from_pretrained(OUTPUT_DIR,
+                                                   do_lower_case=DO_LOWER_CASE)
+        model = XLNetForCauseEffect.from_pretrained(OUTPUT_DIR).to(device)
 
         result = evaluate(model=model,
                           tokenizer=tokenizer,
