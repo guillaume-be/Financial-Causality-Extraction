@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import Optional, List
 
 import pandas as pd
 
@@ -27,17 +27,19 @@ class FinCausalExample:
         self.start_cause_position, self.end_cause_position = 0, 0
         self.start_effect_position, self.end_effect_position = 0, 0
 
-        doc_tokens = []
-        char_to_word_offset = []
+        doc_tokens: List[str] = []
+        char_to_word_offset: List[int] = []
+        word_to_char_mapping: List[int] = []
         prev_is_whitespace = True
 
         # Split on whitespace so that different tokens may be attributed to their original position.
-        for c in self.context_text:
+        for char_index, c in enumerate(self.context_text):
             if _is_whitespace(c):
                 prev_is_whitespace = True
             else:
                 if prev_is_whitespace:
                     doc_tokens.append(c)
+                    word_to_char_mapping.append(char_index)
                 else:
                     doc_tokens[-1] += c
                 prev_is_whitespace = False
@@ -67,6 +69,8 @@ class FinCausalExample:
             self.offset_sentence_3 = char_to_word_offset[int(offset_sentence_3)]
         else:
             self.offset_sentence_3 = 0
+
+        self.word_to_char_mapping = word_to_char_mapping
 
 
 class FinCausalFeatures:

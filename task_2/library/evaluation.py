@@ -18,6 +18,7 @@ import json
 import logging
 import math
 import os
+import string
 import timeit
 from enum import Enum
 from pathlib import Path
@@ -361,27 +362,23 @@ def get_predictions(preliminary_predictions: List[_PrelimPrediction], n_best_siz
             break
         feature = features[prediction.feature_index]
         if prediction.start_index_cause > 0:  # this is a non-null prediction
-            tok_tokens_cause = feature.tokens[prediction.start_index_cause: (prediction.end_index_cause + 1)]
             orig_doc_start_cause = feature.token_to_orig_map[prediction.start_index_cause]
             orig_doc_end_cause = feature.token_to_orig_map[prediction.end_index_cause]
-            orig_tokens_cause = example.doc_tokens[orig_doc_start_cause: (orig_doc_end_cause + 1)]
-            tok_text = tokenizer.convert_tokens_to_string(tok_tokens_cause)
-            # Clean whitespace
-            tok_text_cause = tok_text.strip()
-            tok_text_cause = " ".join(tok_text_cause.split())
-            orig_text_cause = " ".join(orig_tokens_cause)
-            final_text_cause = get_final_text(tok_text_cause, orig_text_cause, do_lower_case, verbose_logging)
+            orig_doc_start_cause = example.word_to_char_mapping[orig_doc_start_cause]
+            if orig_doc_end_cause < len(example.word_to_char_mapping) - 1:
+                orig_doc_end_cause = example.word_to_char_mapping[orig_doc_end_cause + 1] - 1
+            else:
+                orig_doc_end_cause = len(example.context_text)
+            final_text_cause = example.context_text[orig_doc_start_cause: orig_doc_end_cause].strip(',')
 
-            tok_tokens_effect = feature.tokens[prediction.start_index_effect: (prediction.end_index_effect + 1)]
             orig_doc_start_effect = feature.token_to_orig_map[prediction.start_index_effect]
             orig_doc_end_effect = feature.token_to_orig_map[prediction.end_index_effect]
-            orig_tokens_effect = example.doc_tokens[orig_doc_start_effect: (orig_doc_end_effect + 1)]
-            tok_text = tokenizer.convert_tokens_to_string(tok_tokens_effect)
-            # Clean whitespace
-            tok_text_effect = tok_text.strip()
-            tok_text_effect = " ".join(tok_text_effect.split())
-            orig_text_effect = " ".join(orig_tokens_effect)
-            final_text_effect = get_final_text(tok_text_effect, orig_text_effect, do_lower_case, verbose_logging)
+            orig_doc_start_effect = example.word_to_char_mapping[orig_doc_start_effect]
+            if orig_doc_end_effect < len(example.word_to_char_mapping) - 1:
+                orig_doc_end_effect = example.word_to_char_mapping[orig_doc_end_effect + 1] - 1
+            else:
+                orig_doc_end_effect = len(example.context_text)
+            final_text_effect = example.context_text[orig_doc_start_effect: orig_doc_end_effect].strip(',')
 
             if final_text_cause in seen_predictions_cause and final_text_effect in seen_predictions_effect:
                 continue

@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
 MODEL_TYPE = "distilbert"
 MODEL_NAME_OR_PATH = "distilbert-base-uncased-distilled-squad"
 
-DO_TRAIN = True
+DO_TRAIN = False
 DO_EVAL = True
 # Preprocessing
 DO_LOWER_CASE = True  # Set to False for case-sensitive models
@@ -32,7 +32,7 @@ NUM_TRAIN_EPOCHS = 5
 SAVE_MODEL = False
 # Evaluation
 PER_GPU_EVAL_BATCH_SIZE = 8
-N_BEST_SIZE = 15
+N_BEST_SIZE = 5
 MAX_ANSWER_LENGTH = 300
 SENTENCE_BOUNDARY_HEURISTIC = False
 FULL_SENTENCE_HEURISTIC = False
