@@ -1,3 +1,4 @@
+import unicodedata
 from typing import Optional, List
 
 import pandas as pd
@@ -37,12 +38,15 @@ class FinCausalExample:
             if _is_whitespace(c):
                 prev_is_whitespace = True
             else:
-                if prev_is_whitespace:
+                if prev_is_whitespace or _is_punctuation(c):
                     doc_tokens.append(c)
                     word_to_char_mapping.append(char_index)
                 else:
                     doc_tokens[-1] += c
-                prev_is_whitespace = False
+                if _is_punctuation(c):
+                    prev_is_whitespace = True
+                else:
+                    prev_is_whitespace = False
             char_to_word_offset.append(len(doc_tokens) - 1)
 
         self.doc_tokens = doc_tokens
@@ -139,5 +143,15 @@ class FinCausalResult:
 
 def _is_whitespace(c):
     if c == " " or c == "\t" or c == "\r" or c == "\n" or c == '\xa0' or ord(c) == 0x202F:
+        return True
+    return False
+
+
+def _is_punctuation(char):
+    cp = ord(char)
+    if (cp >= 33 and cp <= 47) or (cp >= 58 and cp <= 64) or (cp >= 91 and cp <= 96) or (cp >= 123 and cp <= 126):
+        return True
+    cat = unicodedata.category(char)
+    if cat.startswith("P"):
         return True
     return False

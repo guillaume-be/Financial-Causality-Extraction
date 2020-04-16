@@ -28,8 +28,7 @@ import torch
 from torch.utils.data import TensorDataset
 from tqdm import tqdm
 from transformers.tokenization_bert import whitespace_tokenize
-
-from task_2.library.data import FinCausalExample, FinCausalFeatures
+from task_2.library.data import FinCausalExample, FinCausalFeatures, _is_punctuation
 
 logger = logging.getLogger(__name__)
 
@@ -180,14 +179,14 @@ def fincausal_convert_example_to_features(example: FinCausalExample,
 
         # If the cause cannot be found in the text, then skip this example.
         actual_cause_text = " ".join(example.doc_tokens[start_cause_position: (end_cause_position + 1)])
-        cleaned_cause_text = " ".join(whitespace_tokenize(example.cause_text))
+        cleaned_cause_text = " ".join(whitespace_tokenize(_run_split_on_punc(example.cause_text)))
         if actual_cause_text.find(cleaned_cause_text) == -1:
             logger.warning("Could not find cause: '%s' vs. '%s'", actual_cause_text, cleaned_cause_text)
             return []
 
         # If the effect cannot be found in the text, then skip this example.
         actual_effect_text = " ".join(example.doc_tokens[start_effect_position: (end_effect_position + 1)])
-        cleaned_effect_text = " ".join(whitespace_tokenize(example.effect_text))
+        cleaned_effect_text = " ".join(whitespace_tokenize(_run_split_on_punc(example.effect_text)))
         if actual_effect_text.find(cleaned_effect_text) == -1:
             logger.warning("Could not find effect: '%s' vs. '%s'", actual_effect_text, cleaned_effect_text)
             return []
@@ -384,12 +383,15 @@ def fincausal_convert_examples_to_features(
                 p.imap(annotate_, examples, chunksize=32),
                 total=len(examples),
                 desc="convert squad examples to features",
+                position=0,
+                leave=True
             )
         )
     new_features = []
     unique_id = 1000000000
     example_index = 0
-    for example_features in tqdm(features, total=len(features), desc="add example index and unique id"):
+    for example_features in tqdm(features, total=len(features), desc="add example index and unique id",
+                                 position=0, leave=True):
         if not example_features:
             continue
         for example_feature in example_features:
@@ -435,3 +437,23 @@ def fincausal_convert_examples_to_features(
 
         return features, dataset
     return features
+
+
+def _run_split_on_punc(text):
+    chars = list(text)
+    i = 0
+    start_new_word = True
+    output = []
+    while i < len(chars):
+        char = chars[i]
+        if _is_punctuation(char):
+            output.append([char])
+            start_new_word = True
+        else:
+            if start_new_word:
+                output.append([])
+            start_new_word = False
+            output[-1].append(char)
+        i += 1
+
+    return " ".join(["".join(x) for x in output])

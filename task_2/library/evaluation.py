@@ -18,7 +18,6 @@ import json
 import logging
 import math
 import os
-import string
 import timeit
 from enum import Enum
 from pathlib import Path
@@ -110,11 +109,8 @@ def evaluate(model, tokenizer, device: torch.device, file_path: Path, model_type
         all_results,
         n_best_size,
         max_answer_length,
-        do_lower_case,
         output_prediction_file,
         output_nbest_file,
-        verbose_logging,
-        tokenizer,
         sentence_boundary_heuristic,
         full_sentence_heuristic,
         shared_sentence_heuristic
@@ -352,8 +348,7 @@ def filter_impossible_spans(features,
 
 
 def get_predictions(preliminary_predictions: List[_PrelimPrediction], n_best_size: int,
-                    features: List[FinCausalFeatures], example: FinCausalExample,
-                    tokenizer, do_lower_case: bool, verbose_logging: bool) -> List[_NbestPrediction]:
+                    features: List[FinCausalFeatures], example: FinCausalExample) -> List[_NbestPrediction]:
     seen_predictions_cause = {}
     seen_predictions_effect = {}
     nbest = []
@@ -364,21 +359,23 @@ def get_predictions(preliminary_predictions: List[_PrelimPrediction], n_best_siz
         if prediction.start_index_cause > 0:  # this is a non-null prediction
             orig_doc_start_cause = feature.token_to_orig_map[prediction.start_index_cause]
             orig_doc_end_cause = feature.token_to_orig_map[prediction.end_index_cause]
-            orig_doc_start_cause = example.word_to_char_mapping[orig_doc_start_cause]
+            orig_doc_start_cause_char = example.word_to_char_mapping[orig_doc_start_cause]
             if orig_doc_end_cause < len(example.word_to_char_mapping) - 1:
-                orig_doc_end_cause = example.word_to_char_mapping[orig_doc_end_cause + 1] - 1
+                orig_doc_end_cause_char = example.word_to_char_mapping[orig_doc_end_cause + 1]
             else:
-                orig_doc_end_cause = len(example.context_text)
-            final_text_cause = example.context_text[orig_doc_start_cause: orig_doc_end_cause].strip(',')
+                orig_doc_end_cause_char = len(example.context_text)
+            final_text_cause = example.context_text[orig_doc_start_cause_char: orig_doc_end_cause_char]
+            final_text_cause = final_text_cause.strip()
 
             orig_doc_start_effect = feature.token_to_orig_map[prediction.start_index_effect]
             orig_doc_end_effect = feature.token_to_orig_map[prediction.end_index_effect]
-            orig_doc_start_effect = example.word_to_char_mapping[orig_doc_start_effect]
+            orig_doc_start_effect_char = example.word_to_char_mapping[orig_doc_start_effect]
             if orig_doc_end_effect < len(example.word_to_char_mapping) - 1:
-                orig_doc_end_effect = example.word_to_char_mapping[orig_doc_end_effect + 1] - 1
+                orig_doc_end_effect_char = example.word_to_char_mapping[orig_doc_end_effect + 1]
             else:
-                orig_doc_end_effect = len(example.context_text)
-            final_text_effect = example.context_text[orig_doc_start_effect: orig_doc_end_effect].strip(',')
+                orig_doc_end_effect_char = len(example.context_text)
+            final_text_effect = example.context_text[orig_doc_start_effect_char: orig_doc_end_effect_char]
+            final_text_effect = final_text_effect.strip()
 
             if final_text_cause in seen_predictions_cause and final_text_effect in seen_predictions_effect:
                 continue
@@ -404,11 +401,8 @@ def compute_predictions_logits(
         all_results,
         n_best_size,
         max_answer_length,
-        do_lower_case,
         output_prediction_file,
         output_nbest_file,
-        verbose_logging,
-        tokenizer,
         sentence_boundary_heuristic,
         full_sentence_heuristic,
         shared_sentence_heuristic
@@ -443,8 +437,7 @@ def compute_predictions_logits(
                                                    x.start_logit_effect + x.end_logit_effect),
                                     reverse=True)
 
-        nbest = get_predictions(prelim_predictions, n_best_size, features, example, tokenizer,
-                                do_lower_case, verbose_logging)
+        nbest = get_predictions(prelim_predictions, n_best_size, features, example)
 
         # In very rare edge cases we could have no valid predictions. So we
         # just create a none prediction in this case to avoid failure.
