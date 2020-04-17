@@ -38,7 +38,8 @@ def train(train_dataset, model, tokenizer, train_batch_size: int,
           n_best_size: int, max_answer_length: int,
           sentence_boundary_heuristic: bool, full_sentence_heuristic: bool, shared_sentence_heuristic: bool,
           do_lower_case: bool,
-          learning_rate: float, weight_decay: float = 0.0, adam_epsilon: float = 1e-8, max_grad_norm: float = 1.0,
+          learning_rate: float, weight_decay: float = 0.0, differential_lr_ratio: float = 0.0,
+          adam_epsilon: float = 1e-8, max_grad_norm: float = 1.0,
           overwrite_cache: bool = False):
     """ Train the model """
     tb_writer = SummaryWriter()
@@ -54,12 +55,35 @@ def train(train_dataset, model, tokenizer, train_batch_size: int,
 
     # Prepare optimizer and schedule (linear warmup and decay)
     no_decay = ["bias", "LayerNorm.weight"]
+    no_scaled_lr = ["cause_outputs", "effect_outputs"]
+    if differential_lr_ratio == 0:
+        differential_lr_ratio = 1.0
+    assert differential_lr_ratio <= 1, "ratio for language model layers should be <= 1"
     optimizer_grouped_parameters = [
         {
-            "params": [p for n, p in model.named_parameters() if not any(nd in n for nd in no_decay)],
+            "params": [p for n, p in model.named_parameters() if (not any(nd in n for nd in no_decay)
+                                                                  and not any(nlr in n for nlr in no_scaled_lr))],
+            'lr': learning_rate * differential_lr_ratio,
             "weight_decay": weight_decay,
         },
-        {"params": [p for n, p in model.named_parameters() if any(nd in n for nd in no_decay)], "weight_decay": 0.0},
+        {
+            "params": [p for n, p in model.named_parameters() if (not any(nd in n for nd in no_decay)
+                                                                  and any(nlr in n for nlr in no_scaled_lr))],
+            'lr': learning_rate,
+            "weight_decay": weight_decay,
+        },
+        {
+            "params": [p for n, p in model.named_parameters() if (any(nd in n for nd in no_decay)
+                                                                  and not any(nlr in n for nlr in no_scaled_lr))],
+            'lr': learning_rate * differential_lr_ratio,
+            "weight_decay": 0.0
+        },
+        {
+            "params": [p for n, p in model.named_parameters() if (any(nd in n for nd in no_decay)
+                                                                  and any(nlr in n for nlr in no_scaled_lr))],
+            'lr': learning_rate,
+            "weight_decay": 0.0
+        },
     ]
     optimizer = AdamW(optimizer_grouped_parameters, lr=learning_rate, eps=adam_epsilon)
     scheduler = get_linear_schedule_with_warmup(optimizer, num_warmup_steps=warmup_steps, num_training_steps=t_total)

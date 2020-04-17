@@ -1,3 +1,4 @@
+import json
 import logging
 import os
 from pathlib import Path
@@ -16,8 +17,8 @@ logger = logging.getLogger(__name__)
 MODEL_TYPE = "distilbert"
 MODEL_NAME_OR_PATH = "distilbert-base-uncased-distilled-squad"
 
-DO_TRAIN = False
-DO_EVAL = True
+DO_TRAIN = True
+DO_EVAL = False
 # Preprocessing
 DO_LOWER_CASE = True  # Set to False for case-sensitive models
 MAX_SEQ_LENGTH = 512
@@ -28,8 +29,9 @@ PER_GPU_BATCH_SIZE = 12
 GRADIENT_ACCUMULATION_STEPS = 1
 WARMUP_STEPS = 20
 LEARNING_RATE = 3e-5
+DIFFERENTIAL_LR_RATIO = 1.0
 NUM_TRAIN_EPOCHS = 5
-SAVE_MODEL = True
+SAVE_MODEL = False
 # Evaluation
 PER_GPU_EVAL_BATCH_SIZE = 8
 N_BEST_SIZE = 5
@@ -104,6 +106,7 @@ if __name__ == '__main__':
                                      shared_sentence_heuristic=SHARED_SENTENCE_HEURISTIC,
                                      do_lower_case=DO_LOWER_CASE,
                                      learning_rate=LEARNING_RATE,
+                                     differential_lr_ratio=DIFFERENTIAL_LR_RATIO,
                                      log_file=log_file,
                                      overwrite_cache=OVERWRITE_CACHE)
 
@@ -114,7 +117,8 @@ if __name__ == '__main__':
             model_to_save.save_pretrained(OUTPUT_DIR)
             tokenizer.save_pretrained(OUTPUT_DIR)
             logger.info("Saving final model to %s", OUTPUT_DIR)
-
+            with open(os.path.join(OUTPUT_DIR, "logs.json"), 'w') as f:
+                json.dump(log_file, f)
     if DO_EVAL:
         tokenizer = DistilBertTokenizer.from_pretrained(OUTPUT_DIR,
                                                         do_lower_case=DO_LOWER_CASE)
