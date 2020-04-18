@@ -4,9 +4,9 @@ from pathlib import Path
 from sklearn.model_selection import train_test_split
 
 if __name__ == '__main__':
-    input_file = Path("E:/Coding/YseopLab/FNP_2020_FinCausal/baseline/task2/fnp2020-fincausal-task2.csv")
-    train_output = Path("E:/Coding/YseopLab/FNP_2020_FinCausal/baseline/task2/fnp2020-train.csv")
-    test_output = Path("E:/Coding/YseopLab/FNP_2020_FinCausal/baseline/task2/fnp2020-dev.csv")
+    input_file = Path("E:/Coding/finNLP/task_2/data/fnp2020-fincausal-task2.csv")
+    train_output = Path("E:/Coding/finNLP/task_2/data/fnp2020-train.csv")
+    test_output = Path("E:/Coding/finNLP/task_2/data/fnp2020-dev.csv")
     size = 0.2
     seed = 42
 

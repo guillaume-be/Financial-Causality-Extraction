@@ -25,7 +25,7 @@ from torch.utils.tensorboard import SummaryWriter
 from tqdm import trange, tqdm
 from transformers import AdamW, get_linear_schedule_with_warmup
 
-from task_2.library.evaluation import evaluate
+from .evaluation import evaluate
 
 logger = logging.getLogger(__name__)
 
@@ -212,7 +212,7 @@ def train(train_dataset, model, tokenizer, train_batch_size: int,
                     logger.info("Saving model checkpoint to %s", _output_dir)
                     logger.info("Saving log file to %s", _output_dir)
                     with open(os.path.join(output_dir, "logs.json"), 'w') as f:
-                        json.dump(log_file, f)
+                        json.dump(log_file, f, indent=4)
 
             if max_steps is not None and global_step > max_steps:
                 epoch_iterator.close()

@@ -28,7 +28,7 @@ import torch
 from torch.utils.data import TensorDataset
 from tqdm import tqdm
 from transformers.tokenization_bert import whitespace_tokenize
-from task_2.library.data import FinCausalExample, FinCausalFeatures, _is_punctuation
+from .data import FinCausalExample, FinCausalFeatures, _is_punctuation
 
 logger = logging.getLogger(__name__)
 

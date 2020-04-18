@@ -25,14 +25,14 @@ from typing import Dict, List
 import numpy as np
 
 import torch
-from sklearn.metrics import classification_report, precision_recall_fscore_support
+from sklearn.metrics import precision_recall_fscore_support
 from torch.utils.data import SequentialSampler, DataLoader
 from tqdm import tqdm
 from transformers import BasicTokenizer
 
-from task_2.library.data import FinCausalResult, FinCausalFeatures, FinCausalExample
-from task_2.library.fincausal_evaluation.evaluation_utils import s2dict, make_causal_input
-from task_2.library.preprocessing import load_and_cache_examples
+from .data import FinCausalResult, FinCausalFeatures, FinCausalExample
+from .fincausal_evaluation.evaluation_utils import s2dict, make_causal_input
+from .preprocessing import load_and_cache_examples
 
 logger = logging.getLogger(__name__)
 

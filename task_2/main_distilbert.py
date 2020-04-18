@@ -31,7 +31,7 @@ WARMUP_STEPS = 20
 LEARNING_RATE = 3e-5
 DIFFERENTIAL_LR_RATIO = 1.0
 NUM_TRAIN_EPOCHS = 5
-SAVE_MODEL = False
+SAVE_MODEL = True
 # Evaluation
 PER_GPU_EVAL_BATCH_SIZE = 8
 N_BEST_SIZE = 5
@@ -40,9 +40,12 @@ SENTENCE_BOUNDARY_HEURISTIC = False
 FULL_SENTENCE_HEURISTIC = False
 SHARED_SENTENCE_HEURISTIC = False
 
-TRAIN_FILE = Path("E:/Coding/finNLP/task_2/data/fnp2020-train.csv")
-PREDICT_FILE = Path("E:/Coding/finNLP/task_2/data/fnp2020-dev.csv")
+# TRAIN_FILE = Path("E:/Coding/finNLP/task_2/data/fnp2020-train.csv")
+# PREDICT_FILE = Path("E:/Coding/finNLP/task_2/data/fnp2020-dev.csv")
+TRAIN_FILE = Path("E:/Coding/finNLP/task_2/data/fnp2020-fincausal2-task2.csv")
+PREDICT_FILE = Path("E:/Coding/finNLP/task_2/data/fnp2020-fincausal-task2.csv")
 OUTPUT_DIR = 'E:/Coding/finNLP/task_2/output/' + MODEL_NAME_OR_PATH
+
 
 log_file = {'MODEL_TYPE': MODEL_TYPE,
             'MODEL_NAME_OR_PATH': MODEL_NAME_OR_PATH,
@@ -118,7 +121,7 @@ if __name__ == '__main__':
             tokenizer.save_pretrained(OUTPUT_DIR)
             logger.info("Saving final model to %s", OUTPUT_DIR)
             with open(os.path.join(OUTPUT_DIR, "logs.json"), 'w') as f:
-                json.dump(log_file, f)
+                json.dump(log_file, f, indent=4)
     if DO_EVAL:
         tokenizer = DistilBertTokenizer.from_pretrained(OUTPUT_DIR,
                                                         do_lower_case=DO_LOWER_CASE)
