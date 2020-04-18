@@ -15,32 +15,32 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 MODEL_TYPE = "roberta"
-MODEL_NAME_OR_PATH = "twmkn9/distilroberta-base-squad2"
+MODEL_NAME_OR_PATH = "deepset/bert-base-cased-squad2"
 
 DO_TRAIN = False
 DO_EVAL = True
 # Preprocessing
-DO_LOWER_CASE = True  # Set to False for case-sensitive models
+DO_LOWER_CASE = False  # Set to False for case-sensitive models
 MAX_SEQ_LENGTH = 384
 DOC_STRIDE = 128
 OVERWRITE_CACHE = True
 # Training
-PER_GPU_BATCH_SIZE = 12
-GRADIENT_ACCUMULATION_STEPS = 1
+PER_GPU_BATCH_SIZE = 4
+GRADIENT_ACCUMULATION_STEPS = 3
 WARMUP_STEPS = 20
 LEARNING_RATE = 3e-5
 NUM_TRAIN_EPOCHS = 3
 SAVE_MODEL = False
 # Evaluation
 PER_GPU_EVAL_BATCH_SIZE = 8
-N_BEST_SIZE = 20
+N_BEST_SIZE = 5
 MAX_ANSWER_LENGTH = 300
 SENTENCE_BOUNDARY_HEURISTIC = False
 FULL_SENTENCE_HEURISTIC = False
 SHARED_SENTENCE_HEURISTIC = False
 
-TRAIN_FILE = Path("E:/Coding/finNLP/task_2/data/fnp2020-train.csv")
-PREDICT_FILE = Path("E:/Coding/finNLP/task_2/data/fnp2020-dev.csv")
+TRAIN_FILE = Path("E:/Coding/finNLP/task_2/data/fnp2020-fincausal2-task2.csv")
+PREDICT_FILE = Path("E:/Coding/finNLP/task_2/data/fnp2020-fincausal-task2.csv")
 OUTPUT_DIR = 'E:/Coding/finNLP/task_2/output/' + MODEL_NAME_OR_PATH
 
 log_file = {'MODEL_TYPE': MODEL_TYPE,

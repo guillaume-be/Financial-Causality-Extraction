@@ -319,7 +319,8 @@ def filter_impossible_spans(features,
                                     # extended as much as possible, prioritizing the cause.
                                     if not set(cause_sentences).isdisjoint(set(effect_sentences)) \
                                             and shared_sentence_heuristic \
-                                            and len(cause_sentences) == 1 and len(effect_sentences):
+                                            and len(cause_sentences) == 1 \
+                                            and len(effect_sentences) == 1:
                                         if start_index_cause < start_index_effect:
                                             start_index_cause = min(
                                                 [all_sentence_offsets[sent] for sent in cause_sentences])
