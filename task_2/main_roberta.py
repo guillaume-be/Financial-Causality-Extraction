@@ -15,7 +15,7 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 MODEL_TYPE = "roberta"
-MODEL_NAME_OR_PATH = "deepset/bert-base-cased-squad2"
+MODEL_NAME_OR_PATH = "deepset/roberta-base-squad2"
 
 DO_TRAIN = False
 DO_EVAL = True

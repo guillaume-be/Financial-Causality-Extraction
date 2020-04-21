@@ -14,6 +14,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 import collections
+import csv
 import json
 import logging
 import math
@@ -101,6 +102,7 @@ def evaluate(model, tokenizer, device: torch.device, file_path: Path, model_type
 
     # Compute predictions
     output_prediction_file = os.path.join(output_dir, "predictions_{}.json".format(prefix))
+    csv_output_prediction_file = os.path.join(output_dir, "predictions_{}.csv".format(prefix))
     output_nbest_file = os.path.join(output_dir, "nbest_predictions_{}.json".format(prefix))
 
     predictions = compute_predictions_logits(
@@ -110,6 +112,7 @@ def evaluate(model, tokenizer, device: torch.device, file_path: Path, model_type
         n_best_size,
         max_answer_length,
         output_prediction_file,
+        csv_output_prediction_file,
         output_nbest_file,
         sentence_boundary_heuristic,
         full_sentence_heuristic,
@@ -403,6 +406,7 @@ def compute_predictions_logits(
         n_best_size,
         max_answer_length,
         output_prediction_file,
+        csv_output_prediction_file,
         output_nbest_file,
         sentence_boundary_heuristic,
         full_sentence_heuristic,
@@ -462,6 +466,7 @@ def compute_predictions_logits(
         nbest_json = []
         for (i, entry) in enumerate(nbest):
             output = collections.OrderedDict()
+            output["text"] = example.context_text
             output["probability"] = probs[i]
             output["cause_text"] = entry.text_cause
             output["cause_start_logit"] = entry.start_logit_cause
@@ -473,12 +478,19 @@ def compute_predictions_logits(
 
         assert len(nbest_json) >= 1
 
-        all_predictions[example.example_id] = {"cause_text": nbest_json[0]["cause_text"],
+        all_predictions[example.example_id] = {"text": nbest_json[0]["text"],
+                                               "cause_text": nbest_json[0]["cause_text"],
                                                "effect_text": nbest_json[0]["effect_text"]}
         all_nbest_json[example.example_id] = nbest_json
 
     with open(output_prediction_file, "w") as writer:
         writer.write(json.dumps(all_predictions, indent=4) + "\n")
+
+    with open(csv_output_prediction_file, "w", encoding='utf-8', newline='') as writer:
+        csv_writer = csv.writer(writer, delimiter=';')
+        csv_writer.writerow(['Index', 'Text', 'Cause', 'Effect'])
+        for (example_id, prediction) in all_predictions.items():
+            csv_writer.writerow([example_id, prediction['text'], prediction['cause_text'], prediction['effect_text']])
 
     with open(output_nbest_file, "w") as writer:
         writer.write(json.dumps(all_nbest_json, indent=4) + "\n")
