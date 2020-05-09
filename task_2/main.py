@@ -1,3 +1,4 @@
+import json
 import logging
 import os
 from pathlib import Path
@@ -139,6 +140,9 @@ if __name__ == '__main__':
             model_to_save.save_pretrained(OUTPUT_DIR)
             tokenizer.save_pretrained(OUTPUT_DIR)
             logger.info("Saving final model to %s", OUTPUT_DIR)
+        logger.info("Saving log file to %s", OUTPUT_DIR)
+        with open(os.path.join(OUTPUT_DIR, "logs.json"), 'w') as f:
+            json.dump(log_file, f, indent=4)
 
     if DO_EVAL:
         tokenizer = tokenizer_class.from_pretrained(OUTPUT_DIR,

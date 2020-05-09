@@ -208,9 +208,6 @@ def train(train_dataset, model, tokenizer, train_batch_size: int,
                     model_to_save.save_pretrained(_output_dir)
                     tokenizer.save_pretrained(_output_dir)
                     logger.info("Saving model checkpoint to %s", _output_dir)
-                    logger.info("Saving log file to %s", _output_dir)
-                    with open(os.path.join(output_dir, "logs.json"), 'w') as f:
-                        json.dump(log_file, f, indent=4)
 
             if max_steps is not None and global_step > max_steps:
                 epoch_iterator.close()
