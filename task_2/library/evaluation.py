@@ -29,7 +29,7 @@ from torch.utils.data import SequentialSampler, DataLoader
 from tqdm import tqdm
 from transformers import BasicTokenizer
 
-from task_2.library.fincausal_evaluation.task2_evaluate import encode_causal_tokens, Task2Data
+from .fincausal_evaluation.task2_evaluate import encode_causal_tokens, Task2Data
 from .data import FinCausalResult, FinCausalFeatures, FinCausalExample
 from .preprocessing import load_and_cache_examples
 from .fincausal_evaluation.task2_evaluate import evaluate as official_evaluate

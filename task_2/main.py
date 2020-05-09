@@ -4,7 +4,7 @@ import os
 from pathlib import Path
 from enum import Enum
 import torch
-from transformers import BertTokenizer, DistilBertTokenizer, XLNetTokenizer
+from transformers import BertTokenizer, DistilBertTokenizer, XLNetTokenizer, AutoTokenizer, RobertaTokenizer
 
 from task_2.library.evaluation import evaluate
 from task_2.library.models.bert import BertForCauseEffect
@@ -25,15 +25,19 @@ class ModelConfigurations(Enum):
     XLNetBase = ('xlnet', 'xlnet-base-cased', False)
 
 
-DO_TRAIN = True
+model_config = ModelConfigurations.RoBERTaSquad
+# RUN_NAME = 'TRAIN_PRACTICE_EVAL_TRIAL'
+RUN_NAME = None
+
+DO_TRAIN = False
 DO_EVAL = True
 # Preprocessing
 MAX_SEQ_LENGTH = 384
 DOC_STRIDE = 128
 OVERWRITE_CACHE = True
 # Training
-PER_GPU_BATCH_SIZE = 12  # 4 for BERT-based models, 12 for DistilBERT
-GRADIENT_ACCUMULATION_STEPS = 1  # 3 for BERT-base models, 1 for DistilBERT
+PER_GPU_BATCH_SIZE = 4  # 4 for BERT-based models, 12 for DistilBERT
+GRADIENT_ACCUMULATION_STEPS = 3  # 3 for BERT-base models, 1 for DistilBERT
 WARMUP_STEPS = 20
 LEARNING_RATE = 3e-5
 DIFFERENTIAL_LR_RATIO = 1.0
@@ -47,11 +51,13 @@ SENTENCE_BOUNDARY_HEURISTIC = True
 FULL_SENTENCE_HEURISTIC = False
 SHARED_SENTENCE_HEURISTIC = False
 
-model_config = ModelConfigurations.DistilBertSquad
 (MODEL_TYPE, MODEL_NAME_OR_PATH, DO_LOWER_CASE) = model_config.value
 PRACTICE_FILE = Path("E:/Coding/finNLP/task_2/data/fnp2020-fincausal2-task2.csv")
 TRIAL_FILE = Path("E:/Coding/finNLP/task_2/data/fnp2020-fincausal-task2.csv")
-OUTPUT_DIR = 'E:/Coding/finNLP/task_2/output/' + MODEL_NAME_OR_PATH
+if RUN_NAME is not None:
+    OUTPUT_DIR = str(Path('E:/Coding/finNLP/task_2/output') / (MODEL_NAME_OR_PATH + '_' + RUN_NAME))
+else:
+    OUTPUT_DIR = str(Path('E:/Coding/finNLP/task_2/output') / MODEL_NAME_OR_PATH)
 
 TRAIN_FILE = PRACTICE_FILE
 PREDICT_FILE = TRIAL_FILE
@@ -59,7 +65,7 @@ PREDICT_FILE = TRIAL_FILE
 model_tokenizer_mapping = {
     'distilbert': (DistilBertForCauseEffect, DistilBertTokenizer),
     'bert': (BertForCauseEffect, BertTokenizer),
-    'roberta': (RoBERTaForCauseEffect, BertTokenizer),
+    'roberta': (RoBERTaForCauseEffect, RobertaTokenizer),
     'xlnet': (XLNetForCauseEffect, XLNetTokenizer),
 }
 
@@ -94,9 +100,9 @@ if __name__ == '__main__':
     # Training
     if DO_TRAIN:
 
-        tokenizer = tokenizer_class.from_pretrained(MODEL_NAME_OR_PATH,
-                                                    do_lower_case=DO_LOWER_CASE,
-                                                    cache_dir=OUTPUT_DIR)
+        tokenizer = AutoTokenizer.from_pretrained(MODEL_NAME_OR_PATH,
+                                                  do_lower_case=DO_LOWER_CASE,
+                                                  cache_dir=OUTPUT_DIR)
         model = model_class.from_pretrained(MODEL_NAME_OR_PATH).to(device)
 
         train_dataset = load_and_cache_examples(TRAIN_FILE, MODEL_NAME_OR_PATH, tokenizer,
@@ -145,6 +151,7 @@ if __name__ == '__main__':
             json.dump(log_file, f, indent=4)
 
     if DO_EVAL:
+        print(OUTPUT_DIR)
         tokenizer = tokenizer_class.from_pretrained(OUTPUT_DIR,
                                                     do_lower_case=DO_LOWER_CASE)
         model = model_class.from_pretrained(OUTPUT_DIR).to(device)
