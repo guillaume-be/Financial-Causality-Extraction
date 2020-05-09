@@ -23,17 +23,16 @@ import timeit
 from enum import Enum
 from pathlib import Path
 from typing import Dict, List
-import numpy as np
 
 import torch
-from sklearn.metrics import precision_recall_fscore_support
 from torch.utils.data import SequentialSampler, DataLoader
 from tqdm import tqdm
 from transformers import BasicTokenizer
 
+from task_2.library.fincausal_evaluation.task2_evaluate import encode_causal_tokens, Task2Data
 from .data import FinCausalResult, FinCausalFeatures, FinCausalExample
-from .fincausal_evaluation.evaluation_utils import s2dict, make_causal_input
 from .preprocessing import load_and_cache_examples
+from .fincausal_evaluation.task2_evaluate import evaluate as official_evaluate
 
 logger = logging.getLogger(__name__)
 
@@ -46,7 +45,7 @@ def evaluate(model, tokenizer, device: torch.device, file_path: Path, model_type
              max_seq_length: int, doc_stride: int, eval_batch_size: int, output_dir: str,
              n_best_size: int, max_answer_length: int,
              sentence_boundary_heuristic: bool, full_sentence_heuristic: bool, shared_sentence_heuristic: bool,
-             verbose_logging: bool = False, overwrite_cache: bool = False, prefix=""):
+             overwrite_cache: bool = False, prefix=""):
     dataset, examples, features = load_and_cache_examples(file_path, model_name_or_path, tokenizer,
                                                           max_seq_length, doc_stride,
                                                           output_examples=True, evaluate=True,
@@ -55,7 +54,6 @@ def evaluate(model, tokenizer, device: torch.device, file_path: Path, model_type
     if not os.path.exists(output_dir):
         os.makedirs(output_dir)
 
-    # Note that DistributedSampler samples randomly
     eval_sampler = SequentialSampler(dataset)
     eval_dataloader = DataLoader(dataset, sampler=eval_sampler, batch_size=eval_batch_size)
 
@@ -133,69 +131,77 @@ def evaluate(model, tokenizer, device: torch.device, file_path: Path, model_type
     return results
 
 
+def get_data_from_list(input_data: List[List[str]]):
+    """
+    :param input_data: list of inputs (example id, text, cause, effect)
+    :return: list of Task2Data(index, text, cause, effect, labels)
+    """
+    result = []
+    for example in input_data:
+        (index, text, cause, effect) = tuple(example)
+
+        text = text.lstrip()
+        cause = cause.lstrip()
+        effect = effect.lstrip()
+
+        _, labels = zip(*encode_causal_tokens(text, cause, effect))
+
+        result.append(Task2Data(index, text, cause, effect, labels))
+
+    return result
+
+
 def compute_metrics(examples: List[FinCausalExample], predictions: collections.OrderedDict):
     y_true = []
     y_pred = []
 
-    map1 = ['sentence', 'cause', 'effect']
     for example in examples:
-        dict_true = s2dict([example.context_text, example.cause_text, example.effect_text], map1)
-        y_true.append(dict_true)
+        y_true.append([example.example_id, example.context_text, example.cause_text, example.effect_text])
         prediction = predictions[example.example_id]
-        dict_pred = s2dict([example.context_text, prediction['cause_text'], prediction['effect_text']], map1)
-        y_pred.append(dict_pred)
+        y_pred.append([example.example_id, example.context_text, prediction['cause_text'], prediction['effect_text']])
 
-    hometags_true = make_causal_input(y_true)
-    hometags_pred = make_causal_input(y_pred)
-    labels = {"C": 1, "E": 2, "_": 0}
-    y_true_flat = np.array([labels[token[1]] for row in hometags_true for token in row])
-    y_pred_flat = np.array([labels[token[1]] for row in hometags_pred for token in row])
-    print('************** Identify correct and wrong sentences **************', '\t')
-    all_correct = []
-    all_wrong = []
-    for y_true_ex, y_pred_ex, true_tags, pred_tags in zip(y_true, y_pred, hometags_true, hometags_pred):
-        y_true_tags = np.array([labels[token[1]] for token in true_tags])
-        y_pred_tags = np.array([labels[token[1]] for token in pred_tags])
-        if np.array_equal(y_true_tags, y_pred_tags):
-            all_correct.append({'text': y_true_ex['sentence'],
-                                'cause_true': y_true_ex['cause'],
-                                'effect_true': y_true_ex['effect'],
-                                'cause_pred': y_pred_ex['cause'],
-                                'effect_pred': y_pred_ex['effect']
+    all_correct = list()
+    all_wrong = list()
+    for y_true_ex, y_pred_ex in zip(y_true, y_pred):
+        if (y_true_ex[2] == y_pred_ex[2]) and (y_true_ex[3] == y_pred_ex[3]):
+            all_correct.append({'text': y_true_ex[1],
+                                'cause_true': y_true_ex[2],
+                                'effect_true': y_true_ex[3],
+                                'cause_pred': y_pred_ex[2],
+                                'effect_pred': y_pred_ex[3]
                                 })
         else:
-            all_wrong.append({'text': y_true_ex['sentence'],
-                              'cause_true': y_true_ex['cause'],
-                              'effect_true': y_true_ex['effect'],
-                              'cause_pred': y_pred_ex['cause'],
-                              'effect_pred': y_pred_ex['effect']
+            all_wrong.append({'text': y_true_ex[1],
+                              'cause_true': y_true_ex[2],
+                              'effect_true': y_true_ex[3],
+                              'cause_pred': y_pred_ex[2],
+                              'effect_pred': y_pred_ex[3]
                               })
-    print(f'Ratio of all correct examples: {len(all_correct)}/{len(all_correct) + len(all_wrong)}')
+    logging.info('* Loading reference data')
+    y_true = get_data_from_list(y_true)
+    logging.info('* Loading prediction data')
+    y_pred = get_data_from_list(y_pred)
+    logging.info(f'Load Data: check data set length = {len(y_true) == len(y_pred)}')
+    logging.info(f'Load Data: check data set ref. text = {all([x.text == y.text for x, y in zip(y_true, y_pred)])}')
+    assert len(y_true) == len(y_pred)
+    assert all([x.text == y.text for x, y in zip(y_true, y_pred)])
 
-    print('************************ tasks metrics ***************************', '\t')
+    precision, recall, f1, exact_match = official_evaluate(y_true, y_pred, ['-', 'C', 'E'])
 
-    F1metrics = precision_recall_fscore_support(y_true_flat, y_pred_flat, average='weighted')
+    scores = [
+        "F1: %f\n" % f1,
+        "Recall: %f\n" % recall,
+        "Precision: %f\n" % precision,
+        "ExactMatch: %f\n" % exact_match
+    ]
+    for s in scores:
+        print(s, end='')
 
-    nl = []
-    for yt, yp in zip(y_true_flat, y_pred_flat):
-        d_ = dict()
-        d_["truth"] = yt
-        d_["pred"] = yp
-        d_["diverge"] = 0
-        if d_["truth"] != d_["pred"]:
-            d_["diverge"] = 1
-        nl.append(d_)
-
-    print('F1score:', F1metrics[2])
-    print('Precision: ', F1metrics[1])
-    print('Recall: ', F1metrics[0])
-    print('exact match: ', sum([1 for i in nl if i["diverge"] == 0]), 'over', len(nl), ' total sentences)')
     return {
-               'F1score:': F1metrics[2],
-               'Precision: ': F1metrics[1],
-               'Recall: ': F1metrics[0],
-               'exact match: ': str(sum([1 for i in nl if i["diverge"] == 0])) + ' over ' + str(
-                   len(nl)) + ' total sentences)'
+               'F1score:': f1,
+               'Precision: ': precision,
+               'Recall: ': recall,
+               'exact match: ': exact_match
            }, all_correct, all_wrong
 
 

@@ -149,7 +149,7 @@ def _is_whitespace(c):
 
 def _is_punctuation(char):
     cp = ord(char)
-    if (cp >= 33 and cp <= 47) or (cp >= 58 and cp <= 64) or (cp >= 91 and cp <= 96) or (cp >= 123 and cp <= 126):
+    if (33 <= cp <= 47) or (58 <= cp <= 64) or (91 <= cp <= 96) or (123 <= cp <= 126):
         return True
     cat = unicodedata.category(char)
     if cat.startswith("P"):

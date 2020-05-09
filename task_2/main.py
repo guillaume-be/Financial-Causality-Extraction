@@ -24,15 +24,15 @@ class ModelConfigurations(Enum):
     XLNetBase = ('xlnet', 'xlnet-base-cased', False)
 
 
-DO_TRAIN = False
+DO_TRAIN = True
 DO_EVAL = True
 # Preprocessing
 MAX_SEQ_LENGTH = 384
 DOC_STRIDE = 128
 OVERWRITE_CACHE = True
 # Training
-PER_GPU_BATCH_SIZE = 4
-GRADIENT_ACCUMULATION_STEPS = 3
+PER_GPU_BATCH_SIZE = 12  # 4 for BERT-based models, 12 for DistilBERT
+GRADIENT_ACCUMULATION_STEPS = 1  # 3 for BERT-base models, 1 for DistilBERT
 WARMUP_STEPS = 20
 LEARNING_RATE = 3e-5
 DIFFERENTIAL_LR_RATIO = 1.0
@@ -48,9 +48,12 @@ SHARED_SENTENCE_HEURISTIC = False
 
 model_config = ModelConfigurations.DistilBertSquad
 (MODEL_TYPE, MODEL_NAME_OR_PATH, DO_LOWER_CASE) = model_config.value
-TRAIN_FILE = Path("E:/Coding/finNLP/task_2/data/fnp2020-fincausal2-task2.csv")
-PREDICT_FILE = Path("E:/Coding/finNLP/task_2/data/fnp2020-fincausal-task2.csv")
+PRACTICE_FILE = Path("E:/Coding/finNLP/task_2/data/fnp2020-fincausal2-task2.csv")
+TRIAL_FILE = Path("E:/Coding/finNLP/task_2/data/fnp2020-fincausal-task2.csv")
 OUTPUT_DIR = 'E:/Coding/finNLP/task_2/output/' + MODEL_NAME_OR_PATH
+
+TRAIN_FILE = PRACTICE_FILE
+PREDICT_FILE = TRIAL_FILE
 
 model_tokenizer_mapping = {
     'distilbert': (DistilBertForCauseEffect, DistilBertTokenizer),
