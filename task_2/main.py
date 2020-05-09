@@ -1,26 +1,32 @@
 import logging
 import os
 from pathlib import Path
-
+from enum import Enum
 import torch
-from transformers import BertTokenizer, RobertaTokenizer
+from transformers import BertTokenizer, DistilBertTokenizer, XLNetTokenizer
 
 from task_2.library.evaluation import evaluate
 from task_2.library.models.bert import BertForCauseEffect
+from task_2.library.models.distilbert import DistilBertForCauseEffect
 from task_2.library.models.roberta import RoBERTaForCauseEffect
+from task_2.library.models.xlnet import XLNetForCauseEffect
 from task_2.library.preprocessing import load_and_cache_examples
 from task_2.library.training import train
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-MODEL_TYPE = "roberta"
-MODEL_NAME_OR_PATH = "deepset/roberta-base-squad2"
+
+class ModelConfigurations(Enum):
+    BertSquad = ('bert', 'deepset/bert-base-cased-squad2', False)
+    DistilBertSquad = ('distilbert', 'distilbert-base-uncased-distilled-squad', True)
+    RoBERTaSquad = ('roberta', 'deepset/roberta-base-squad2', False)
+    XLNetBase = ('xlnet', 'xlnet-base-cased', False)
+
 
 DO_TRAIN = False
 DO_EVAL = True
 # Preprocessing
-DO_LOWER_CASE = False  # Set to False for case-sensitive models
 MAX_SEQ_LENGTH = 384
 DOC_STRIDE = 128
 OVERWRITE_CACHE = True
@@ -29,21 +35,35 @@ PER_GPU_BATCH_SIZE = 4
 GRADIENT_ACCUMULATION_STEPS = 3
 WARMUP_STEPS = 20
 LEARNING_RATE = 3e-5
+DIFFERENTIAL_LR_RATIO = 1.0
 NUM_TRAIN_EPOCHS = 3
 SAVE_MODEL = False
 # Evaluation
 PER_GPU_EVAL_BATCH_SIZE = 8
 N_BEST_SIZE = 5
 MAX_ANSWER_LENGTH = 300
-SENTENCE_BOUNDARY_HEURISTIC = False
+SENTENCE_BOUNDARY_HEURISTIC = True
 FULL_SENTENCE_HEURISTIC = False
 SHARED_SENTENCE_HEURISTIC = False
 
+model_config = ModelConfigurations.DistilBertSquad
+(MODEL_TYPE, MODEL_NAME_OR_PATH, DO_LOWER_CASE) = model_config.value
 TRAIN_FILE = Path("E:/Coding/finNLP/task_2/data/fnp2020-fincausal2-task2.csv")
 PREDICT_FILE = Path("E:/Coding/finNLP/task_2/data/fnp2020-fincausal-task2.csv")
 OUTPUT_DIR = 'E:/Coding/finNLP/task_2/output/' + MODEL_NAME_OR_PATH
 
+model_tokenizer_mapping = {
+    'distilbert': (DistilBertForCauseEffect, DistilBertTokenizer),
+    'bert': (BertForCauseEffect, BertTokenizer),
+    'roberta': (RoBERTaForCauseEffect, BertTokenizer),
+    'xlnet': (XLNetForCauseEffect, XLNetTokenizer),
+}
+
+model_class, tokenizer_class = model_tokenizer_mapping[MODEL_TYPE]
+
 log_file = {'MODEL_TYPE': MODEL_TYPE,
+            'MODEL_CLASS': model_class.__name__,
+            'TOKENIZER_CLASS': tokenizer_class.__name__,
             'MODEL_NAME_OR_PATH': MODEL_NAME_OR_PATH,
             'DO_TRAIN': DO_TRAIN,
             'DO_EVAL': DO_EVAL,
@@ -70,10 +90,10 @@ if __name__ == '__main__':
     # Training
     if DO_TRAIN:
 
-        tokenizer = RobertaTokenizer.from_pretrained(MODEL_NAME_OR_PATH,
-                                                     do_lower_case=DO_LOWER_CASE,
-                                                     cache_dir=OUTPUT_DIR)
-        model = RoBERTaForCauseEffect.from_pretrained(MODEL_NAME_OR_PATH).to(device)
+        tokenizer = tokenizer_class.from_pretrained(MODEL_NAME_OR_PATH,
+                                                    do_lower_case=DO_LOWER_CASE,
+                                                    cache_dir=OUTPUT_DIR)
+        model = model_class.from_pretrained(MODEL_NAME_OR_PATH).to(device)
 
         train_dataset = load_and_cache_examples(TRAIN_FILE, MODEL_NAME_OR_PATH, tokenizer,
                                                 MAX_SEQ_LENGTH, DOC_STRIDE,
@@ -105,6 +125,7 @@ if __name__ == '__main__':
                                      full_sentence_heuristic=FULL_SENTENCE_HEURISTIC,
                                      shared_sentence_heuristic=SHARED_SENTENCE_HEURISTIC,
                                      learning_rate=LEARNING_RATE,
+                                     differential_lr_ratio=DIFFERENTIAL_LR_RATIO,
                                      log_file=log_file,
                                      overwrite_cache=OVERWRITE_CACHE)
 
@@ -117,9 +138,9 @@ if __name__ == '__main__':
             logger.info("Saving final model to %s", OUTPUT_DIR)
 
     if DO_EVAL:
-        tokenizer = RobertaTokenizer.from_pretrained(OUTPUT_DIR,
-                                                     do_lower_case=DO_LOWER_CASE)
-        model = RoBERTaForCauseEffect.from_pretrained(OUTPUT_DIR).to(device)
+        tokenizer = tokenizer_class.from_pretrained(OUTPUT_DIR,
+                                                    do_lower_case=DO_LOWER_CASE)
+        model = model_class.from_pretrained(OUTPUT_DIR).to(device)
 
         result = evaluate(model=model,
                           tokenizer=tokenizer,

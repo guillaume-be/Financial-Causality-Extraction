@@ -124,7 +124,7 @@ def _get_sequences(*args, value=None, path=None):
     if len(args) == 1:
         if value is not None:
             # return items matching constraint (i.e. within range with previous token)
-            return [x for x in args[0] if x > value and (x < value+3)]
+            return [x for x in args[0] if x > value and (x < value + 3)]
         else:
             # Special case where text is restricted to a single token
             # return all positions on first call (i.e. value is None)
@@ -137,11 +137,11 @@ def _get_sequences(*args, value=None, path=None):
             # <Debug> keep track of current explored sequence
             p = [x] if path is None else list(path + [x])
             # </Debug>
-            if value is None or (x > value and (x < value+3)):
+            if value is None or (x > value and (x < value + 3)):
                 seqs = _get_sequences(*args[1:], value=x, path=p)
                 # when recursion returns empty list and current position match constraint (either only value
                 # or value within range) add current position as a single result
-                if len(seqs) == 0 and (value is None or (x > value and (x < value+3))):
+                if len(seqs) == 0 and (value is None or (x > value and (x < value + 3))):
                     result.append([x])
                 else:
                     # otherwise combine current position with recursion results (whether returned sequences are list
@@ -243,9 +243,77 @@ def evaluate(truth, predict, classes):
                                                                        average='weighted',
                                                                        zero_division=0)
 
+    import numpy as np
+    """
+    Sklearn Multiclass confusion matrix is:
+    y_true = ["cat", "ant", "cat", "cat", "ant", "bird"]
+    y_pred = ["ant", "ant", "cat", "cat", "ant", "cat"]
+    cmc = multilabel_confusion_matrix(y_true, y_pred, labels=["ant", "bird", "cat"])
+    cmc
+    array([[[3, 1],
+            [0, 2]],
+
+           [[5, 0],
+            [1, 0]],
+
+           [[2, 1],
+            [1, 2]]])
+
+    cm_ant = cmc[0]
+    tp = cm_ant[1,1]	has been classified as ant and is ant
+    fp = cm_ant[0,1]	has been classified as ant and is sth else
+    fn = cm_ant[1,0]    has been classified as sth else than ant and is ant
+    tn = cm_ant[0,0]    has been classified as sth else than ant and is something else
+
+    """
+    print(' ')
+    print('raw metrics')
+    print("#-------------------------------------------------------------------------------------#")
+
+    MCM = metrics.multilabel_confusion_matrix(y_truth, y_predict, labels=classes)
+    tp_sum = MCM[:, 1, 1]
+    print('tp_sum ', tp_sum)
+    pred_sum = tp_sum + MCM[:, 0, 1]
+    print('predicted in the classes ', pred_sum)
+    true_sum = tp_sum + MCM[:, 1, 0]
+    print('actually in the classes (tp + fn: support) ', true_sum)
+
+    """beta : float, 1.0 by default
+    The strength of recall versus precision in the F-score."""
+
+    precision_ = tp_sum / pred_sum
+    recall_ = tp_sum / true_sum
+    beta = 1.0
+    beta2 = beta ** 2
+    denom = beta2 * precision_ + recall_
+    print('denom', denom)
+    denom[denom == 0.] = 1  # avoid division by 0
+    weights = true_sum
+    print("weights", weights)
+    print(' ')
+    print("#-------------------------------------------------------------------------------------#")
+    print('macro scores')
+    f_score_ = (1 + beta2) * precision_ * recall_ / denom
+    print('macro precision ', sum(precision_) / 3, 'macro recall', sum(recall_) / 3, 'macro f_score ',
+          sum(f_score_) / 3)
+
+    ## recompute for average from source
+
+    precision_ = np.average(precision_, weights=weights)
+    recall_ = np.average(recall_, weights=weights)
+    f_score_ = np.average(f_score_, weights=weights)
+    print(' ')
+    print("#-------------------------------------------------------------------------------------#")
+    print('recomputed weighted metrics ')
+    print('weighted precision', precision_, 'weighted recall', recall_, 'weighted_fscore', f_score_)
+    print(' ')
+    print("#-------------------------------------------------------------------------------------#")
+    print('classification report')
+    print(metrics.classification_report(y_truth, y_predict, target_names=classes))
+
     logging.debug(f'SKLEARN EVAL: {f1}, {precision}, {recall}')
 
-    return precision, recall, f1, float(exact_match)/float(len(truth))
+    return precision, recall, f1, float(exact_match) / float(len(truth))
 
 
 Task2Data = namedtuple('Task2Data', ['index', 'text', 'cause', 'effect', 'labels'])
@@ -301,7 +369,7 @@ def evaluate_files(gold_file, submission_file, output_file=None):
         assert all([x.text == y.text for x, y in zip(y_true, y_pred)])
 
         # Process data using classes: -, C & E
-        f1, precision, recall, exact_match = evaluate(y_true, y_pred, ['-', 'C', 'E'])
+        precision, recall, f1, exact_match = evaluate(y_true, y_pred, ['-', 'C', 'E'])
 
         scores = [
             "F1: %f\n" % f1,
@@ -319,6 +387,21 @@ def evaluate_files(gold_file, submission_file, output_file=None):
     else:
         # Submission file most likely being the wrong one - tell which one we are looking for
         logging.error(f'{os.path.basename(gold_file)} not found')
+
+    ## Save for control
+    import pandas as pd
+    df = pd.DataFrame.from_records(y_true)
+    df.columns = ['Index', 'Text', 'Cause', 'Effect', 'TRUTH']
+    dfpred = pd.DataFrame.from_records(y_pred)
+    dfpred.columns = ['Index', 'Text', 'Cause', 'Effect', 'PRED']
+    df['PRED'] = dfpred['PRED']
+    df['TRUTH'] = df['TRUTH'].apply(lambda x: ' '.join(x))
+    df['PRED'] = df['PRED'].apply(lambda x: ' '.join(x))
+
+    ctrlpath = submission_file.split('/')
+    ctrlpath.pop()
+    ctrlpath = '/'.join([path_ for path_ in ctrlpath])
+    df.to_csv(os.path.join(ctrlpath, 'origin_control.csv'), header=1, index=0)
 
 
 def from_folder(args):
@@ -359,7 +442,7 @@ def main():
 
     command2_parser = subparsers.add_parser('from-file', description='Basic mode with path to input and output files')
     command2_parser.set_defaults(func=from_file)
-    command2_parser.add_argument('ref_file', default='../../data/fnp2020-fincausal-task2.csv', help='reference file')
+    command2_parser.add_argument('--ref_file', default='../../data/fnp2020-fincausal-task2.csv', help='reference file')
     command2_parser.add_argument('pred_file', help='prediction file to evaluate')
     command2_parser.add_argument('score_file', nargs='?', default=None,
                                  help='path to output score file (or stdout if not provided)')
@@ -395,7 +478,7 @@ class Test(unittest.TestCase):
         # Round result to 2 decimals
         result = tuple(map(lambda x: round(x, 2), result))
         with self.subTest(value='evaluate'):
-            self.assertEqual(result, (f1, precision, recall, exact_match))
+            self.assertEqual(result, (precision, recall, f1, exact_match))
 
     def test_0(self):
         """ Identity """

@@ -44,7 +44,7 @@ def to_list(tensor):
 
 def evaluate(model, tokenizer, device: torch.device, file_path: Path, model_type: str, model_name_or_path: str,
              max_seq_length: int, doc_stride: int, eval_batch_size: int, output_dir: str,
-             n_best_size: int, max_answer_length: int, do_lower_case: bool,
+             n_best_size: int, max_answer_length: int,
              sentence_boundary_heuristic: bool, full_sentence_heuristic: bool, shared_sentence_heuristic: bool,
              verbose_logging: bool = False, overwrite_cache: bool = False, prefix=""):
     dataset, examples, features = load_and_cache_examples(file_path, model_name_or_path, tokenizer,

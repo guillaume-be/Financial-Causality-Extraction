@@ -102,7 +102,6 @@ if __name__ == '__main__':
                                      sentence_boundary_heuristic=SENTENCE_BOUNDARY_HEURISTIC,
                                      full_sentence_heuristic=FULL_SENTENCE_HEURISTIC,
                                      shared_sentence_heuristic=SHARED_SENTENCE_HEURISTIC,
-                                     do_lower_case=DO_LOWER_CASE,
                                      learning_rate=LEARNING_RATE,
                                      log_file=log_file,
                                      overwrite_cache=OVERWRITE_CACHE)
@@ -132,7 +131,6 @@ if __name__ == '__main__':
                           output_dir=OUTPUT_DIR,
                           n_best_size=N_BEST_SIZE,
                           max_answer_length=MAX_ANSWER_LENGTH,
-                          do_lower_case=DO_LOWER_CASE,
                           sentence_boundary_heuristic=SENTENCE_BOUNDARY_HEURISTIC,
                           full_sentence_heuristic=FULL_SENTENCE_HEURISTIC,
                           shared_sentence_heuristic=SHARED_SENTENCE_HEURISTIC,
