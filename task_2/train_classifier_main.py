@@ -7,6 +7,7 @@ import torch
 from transformers import RobertaTokenizer
 
 from library.evaluation import evaluate
+from library.evaluation_classifier import evaluate_classifier
 from library.models.roberta import RoBERTaForCauseEffectClassification
 from library.preprocessing import load_and_cache_examples
 from library.preprocessing_classifier import load_and_cache_classification_examples
@@ -137,24 +138,14 @@ if __name__ == '__main__':
         #     json.dump(log_file, f, indent=4)
 
     if DO_EVAL:
-        print(OUTPUT_DIR)
-        tokenizer = tokenizer_class.from_pretrained(OUTPUT_DIR,
-                                                    do_lower_case=DO_LOWER_CASE)
+        tokenizer = tokenizer_class.from_pretrained(OUTPUT_DIR, do_lower_case=DO_LOWER_CASE)
         model = model_class.from_pretrained(OUTPUT_DIR).to(device)
 
-        result = evaluate(model=model,
-                          tokenizer=tokenizer,
-                          device=device,
-                          file_path=PREDICT_FILE,
-                          model_type=MODEL_TYPE,
-                          model_name_or_path=MODEL_NAME_OR_PATH,
-                          max_seq_length=MAX_SEQ_LENGTH,
-                          doc_stride=DOC_STRIDE,
-                          eval_batch_size=PER_GPU_EVAL_BATCH_SIZE,
-                          output_dir=OUTPUT_DIR,
-                          n_best_size=N_BEST_SIZE,
-                          max_answer_length=MAX_ANSWER_LENGTH,
-                          sentence_boundary_heuristic=SENTENCE_BOUNDARY_HEURISTIC,
-                          full_sentence_heuristic=FULL_SENTENCE_HEURISTIC,
-                          shared_sentence_heuristic=SHARED_SENTENCE_HEURISTIC,
-                          overwrite_cache=OVERWRITE_CACHE)
+        result = evaluate_classifier(model=model,
+                                     tokenizer=tokenizer,
+                                     device=device,
+                                     file_path=PREDICT_FILE,
+                                     model_type=MODEL_TYPE,
+                                     max_seq_length=MAX_SEQ_LENGTH,
+                                     eval_batch_size=PER_GPU_EVAL_BATCH_SIZE,
+                                     output_dir=OUTPUT_DIR)

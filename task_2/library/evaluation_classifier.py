@@ -44,11 +44,11 @@ def to_list(tensor):
 
 def evaluate_classifier(model, tokenizer, device: torch.device, file_path: Path, model_type: str,
                         max_seq_length: int, eval_batch_size: int, output_dir: str, prefix=""):
-    dataset = load_and_cache_classification_examples(file_path,
-                                                     tokenizer,
-                                                     max_seq_length,
-                                                     output_examples=False,
-                                                     evaluate=True)
+    dataset, _, features = load_and_cache_classification_examples(file_path,
+                                                                  tokenizer,
+                                                                  max_seq_length,
+                                                                  output_examples=True,
+                                                                  evaluate=True)
 
     if not os.path.exists(output_dir):
         os.makedirs(output_dir)
@@ -77,18 +77,22 @@ def evaluate_classifier(model, tokenizer, device: torch.device, file_path: Path,
             if model_type in ["xlm", "roberta", "distilbert", "camembert"]:
                 del inputs["token_type_ids"]
 
-            outputs = model(**inputs)[0].cpu()
+            outputs = list(model(**inputs)[0].cpu().softmax(dim=1).numpy())
+            all_results.extend(outputs)
 
-
-
-            all_results.append(result)
-
-
-
-    # Compute the F1 and exact scores.
-    # results = accuracy
-
-    return results
+    total = 0
+    correct = 0
+    for predicted, feature in zip(all_results, features):
+        if predicted[0] > 0.5:
+            predicted_class = 0
+        else:
+            predicted_class = 1
+        if predicted_class == feature.label:
+            correct += 1
+        total += 1
+    result = {'accuracy': (correct / total)}
+    print(result)
+    return result
 
 
 def _compute_softmax(scores):
