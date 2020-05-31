@@ -6,13 +6,13 @@ from enum import Enum
 import torch
 from transformers import BertTokenizer, DistilBertTokenizer, XLNetTokenizer, AutoTokenizer, RobertaTokenizer
 
-from task_2.library.evaluation import evaluate
-from task_2.library.models.bert import BertForCauseEffect
-from task_2.library.models.distilbert import DistilBertForCauseEffect
-from task_2.library.models.roberta import RoBERTaForCauseEffect
-from task_2.library.models.xlnet import XLNetForCauseEffect
-from task_2.library.preprocessing import load_and_cache_examples
-from task_2.library.training import train
+from library.evaluation import evaluate
+from library.models.bert import BertForCauseEffect
+from library.models.distilbert import DistilBertForCauseEffect
+from library.models.roberta import RoBERTaForCauseEffect
+from library.models.xlnet import XLNetForCauseEffect
+from library.preprocessing import load_and_cache_examples
+from library.training import train
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -26,8 +26,7 @@ class ModelConfigurations(Enum):
 
 
 model_config = ModelConfigurations.RoBERTaSquad
-# RUN_NAME = 'TRAIN_PRACTICE_EVAL_TRIAL'
-RUN_NAME = None
+RUN_NAME = 'TRAIN_PRACTICE_EVAL_TRIAL'
 
 DO_TRAIN = False
 DO_EVAL = True

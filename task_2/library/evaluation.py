@@ -299,7 +299,7 @@ def filter_impossible_spans(features,
                                 # Heuristics extending the prediction spans
                                 if full_sentence_heuristic or shared_sentence_heuristic:
                                     num_tokens = len(feature.tokens)
-                                    all_sentence_offsets = [1] + \
+                                    all_sentence_offsets = [2] + \
                                                            [offset + 1 for offset in sentence_offsets] + \
                                                            [num_tokens - 1]
                                     cause_sentences = []
