@@ -1,4 +1,5 @@
 from torch import nn
+from torch.nn import CrossEntropyLoss
 from transformers import BertPreTrainedModel, RobertaModel
 
 
@@ -64,5 +65,45 @@ class RoBERTaForCauseEffect(BertPreTrainedModel):
             end_effect_loss = loss_fct(end_effect_logits, end_effect_positions)
             total_loss = (start_cause_loss + end_cause_loss + start_effect_loss + end_effect_loss) / 4
             outputs = (total_loss,) + outputs
+
+        return outputs
+
+
+class RoBERTaForCauseEffectClassification(BertPreTrainedModel):
+    def __init__(self, config):
+        super().__init__(config)
+
+        self.roberta = RobertaModel(config)
+        self.cause_effect_classifier = nn.Linear(config.hidden_size, config.num_labels)
+        self.num_labels = 2
+        assert config.num_labels == 2
+        self.init_weights()
+
+    def forward(
+            self,
+            input_ids=None,
+            attention_mask=None,
+            token_type_ids=None,
+            position_ids=None,
+            head_mask=None,
+            inputs_embeds=None,
+            labels=None,
+    ):
+        bert_output = self.roberta(
+            input_ids=input_ids,
+            attention_mask=attention_mask,
+            token_type_ids=token_type_ids,
+            position_ids=position_ids,
+            head_mask=head_mask,
+            inputs_embeds=inputs_embeds
+        )
+        hidden_states = bert_output[1]  # (bs, max_query_len, dim)
+        logits = self.cause_effect_classifier(hidden_states)  # (bs, max_query_len, 2)
+
+        outputs = (logits,) + bert_output[2:]
+        if labels is not None:
+            loss_fct = CrossEntropyLoss()
+            loss = loss_fct(logits.view(-1, self.num_labels), labels.view(-1))
+            outputs = (loss,) + outputs
 
         return outputs

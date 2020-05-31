@@ -141,6 +141,34 @@ class FinCausalResult:
             self.cls_logits = cls_logits
 
 
+class FinCausalClassificationExample:
+
+    def __init__(self,
+                 example_id: str,
+                 context_text: str,
+                 clause_text: str,
+                 clause_label: Optional[int]):
+        self.example_id = example_id
+        self.context_text = context_text
+        self.clause_text = clause_text
+        self.clause_label = clause_label
+
+
+class FinCausalClassificationFeature:
+
+    def __init__(
+            self,
+            input_ids,
+            attention_mask,
+            token_type_ids,
+            label
+    ):
+        self.input_ids = input_ids
+        self.attention_mask = attention_mask
+        self.token_type_ids = token_type_ids
+        self.label = label
+
+
 def _is_whitespace(c):
     if c == " " or c == "\t" or c == "\r" or c == "\n" or c == '\xa0' or ord(c) == 0x202F:
         return True
