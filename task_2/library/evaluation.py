@@ -25,9 +25,10 @@ from pathlib import Path
 from typing import Dict, List
 
 import torch
+from torch import nn
 from torch.utils.data import SequentialSampler, DataLoader
 from tqdm import tqdm
-from transformers import BasicTokenizer
+from transformers import BasicTokenizer, PreTrainedTokenizer
 
 from .fincausal_evaluation.task2_evaluate import encode_causal_tokens, Task2Data
 from .data import FinCausalResult, FinCausalFeatures, FinCausalExample
@@ -45,7 +46,7 @@ def evaluate(model, tokenizer, device: torch.device, file_path: Path, model_type
              max_seq_length: int, doc_stride: int, eval_batch_size: int, output_dir: str,
              n_best_size: int, max_answer_length: int,
              sentence_boundary_heuristic: bool, full_sentence_heuristic: bool, shared_sentence_heuristic: bool,
-             overwrite_cache: bool = False, prefix=""):
+             overwrite_cache: bool = False, prefix="", classifier_model=None, classifier_tokenizer=None):
     dataset, examples, features = load_and_cache_examples(file_path, model_name_or_path, tokenizer,
                                                           max_seq_length, doc_stride,
                                                           output_examples=True, evaluate=True,
@@ -117,6 +118,13 @@ def evaluate(model, tokenizer, device: torch.device, file_path: Path, model_type
         shared_sentence_heuristic
     )
 
+    # Run classifier to clean-up cause/effect confusions
+    if classifier_model is not None and classifier_tokenizer is not None:
+        predictions = clean_up_cause_effect_confusion(predictions,
+                                                      classifier_model,
+                                                      classifier_tokenizer,
+                                                      max_seq_length)
+
     # Compute the F1 and exact scores.
     results, correct, wrong = compute_metrics(examples, predictions)
     output_prediction_file_correct = os.path.join(output_dir, "predictions_{}_correct.json".format(prefix))
@@ -129,6 +137,46 @@ def evaluate(model, tokenizer, device: torch.device, file_path: Path, model_type
         writer.write(json.dumps(wrong, indent=4) + "\n")
 
     return results
+
+
+def clean_up_cause_effect_confusion(predictions: collections.OrderedDict,
+                                    classifier: nn.Module,
+                                    tokenizer: PreTrainedTokenizer,
+                                    max_seq_length=512):
+    classifier = classifier.eval().cuda()
+    new_predictions = collections.OrderedDict()
+    for (prediction_idx, prediction) in predictions.items():
+        cause_input = tokenizer.encode_plus(text=prediction['text'],
+                                            text_pair=prediction['cause_text'],
+                                            max_length=max_seq_length,
+                                            return_overflowing_tokens=False,
+                                            pad_to_max_length=True,
+                                            stride=0,
+                                            truncation_strategy="only_first",
+                                            return_token_type_ids=False,
+                                            return_tensors='pt'
+                                            )
+        effect_input = tokenizer.encode_plus(text=prediction['text'],
+                                             text_pair=prediction['effect_text'],
+                                             max_length=max_seq_length,
+                                             return_overflowing_tokens=False,
+                                             pad_to_max_length=True,
+                                             stride=0,
+                                             truncation_strategy="only_first",
+                                             return_token_type_ids=False,
+                                             return_tensors='pt'
+                                             )
+        input_tensor = torch.stack([cause_input.input_ids.squeeze(), effect_input.input_ids.squeeze()]).cuda()
+        output = classifier(input_tensor)[0].detach().cpu()
+        softmaxed_output = output.softmax(dim=1)[:, 0]
+
+        if softmaxed_output[0] / softmaxed_output[1] < 0.1:
+            effect = predictions[prediction_idx]['effect_text']
+            cause = predictions[prediction_idx]['cause_text']
+            predictions[prediction_idx]['cause_text'] = effect
+            predictions[prediction_idx]['effect_text'] = cause
+
+    return predictions
 
 
 def get_data_from_list(input_data: List[List[str]]):

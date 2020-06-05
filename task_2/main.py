@@ -9,7 +9,7 @@ from transformers import BertTokenizer, DistilBertTokenizer, XLNetTokenizer, Aut
 from library.evaluation import evaluate
 from library.models.bert import BertForCauseEffect
 from library.models.distilbert import DistilBertForCauseEffect
-from library.models.roberta import RoBERTaForCauseEffect
+from library.models.roberta import RoBERTaForCauseEffect, RoBERTaForCauseEffectClassification
 from library.models.xlnet import XLNetForCauseEffect
 from library.preprocessing import load_and_cache_examples
 from library.training import train
@@ -155,6 +155,11 @@ if __name__ == '__main__':
                                                     do_lower_case=DO_LOWER_CASE)
         model = model_class.from_pretrained(OUTPUT_DIR).to(device)
 
+        classifier_model = RoBERTaForCauseEffectClassification.from_pretrained(
+            'E:/Coding/finNLP/task_2/output/deepset/roberta-base-squad2_TRAIN_PRACTICE_EVAL_TRIAL_TRAIN_PRACTICE_EVAL_TRIAL_CLASSIFICATION')
+        classifier_tokenizer = RobertaTokenizer.from_pretrained(
+            'E:/Coding/finNLP/task_2/output/deepset/roberta-base-squad2_TRAIN_PRACTICE_EVAL_TRIAL_TRAIN_PRACTICE_EVAL_TRIAL_CLASSIFICATION')
+
         result = evaluate(model=model,
                           tokenizer=tokenizer,
                           device=device,
@@ -170,4 +175,7 @@ if __name__ == '__main__':
                           sentence_boundary_heuristic=SENTENCE_BOUNDARY_HEURISTIC,
                           full_sentence_heuristic=FULL_SENTENCE_HEURISTIC,
                           shared_sentence_heuristic=SHARED_SENTENCE_HEURISTIC,
-                          overwrite_cache=OVERWRITE_CACHE)
+                          overwrite_cache=OVERWRITE_CACHE,
+                          classifier_model=classifier_model,
+                          classifier_tokenizer=classifier_tokenizer
+                          )

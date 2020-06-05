@@ -6,11 +6,9 @@ from enum import Enum
 import torch
 from transformers import RobertaTokenizer, BertTokenizer
 
-from library.evaluation import evaluate
 from library.evaluation_classifier import evaluate_classifier
 from library.models.bert import BertForCauseEffectClassification
 from library.models.roberta import RoBERTaForCauseEffectClassification
-from library.preprocessing import load_and_cache_examples
 from library.preprocessing_classifier import load_and_cache_classification_examples
 from library.training_classifier import train_classifier
 
@@ -21,16 +19,16 @@ logger = logging.getLogger(__name__)
 class ModelConfigurations(Enum):
     RoBERTaSquad = ('roberta',
                     'E:/Coding/finNLP/task_2/output/deepset/roberta-base-squad2_TRAIN_PRACTICE_EVAL_TRIAL',
-                    False),
+                    False)
     FinBERT = ('finbert',
                'E:/Coding/finNLP/task_2/pretrained/finbert',
-               True),
+               True)
     FinBERTSentiment = ('finbert-sentiment',
                         'E:/Coding/finNLP/task_2/pretrained/finbert_sentiment',
                         True)
 
 
-model_config = ModelConfigurations.FinBERTSentiment
+model_config = ModelConfigurations.RoBERTaSquad
 RUN_NAME = 'TRAIN_PRACTICE_EVAL_TRIAL_CLASSIFICATION'
 
 DO_TRAIN = True
