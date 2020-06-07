@@ -224,11 +224,11 @@ def fincausal_convert_example_to_features(example: FinCausalExample,
     if example.offset_sentence_2 > 0:
         tok_sentence_2_offset = orig_to_tok_index[example.offset_sentence_2 + 1] - 1
     else:
-        tok_sentence_2_offset = 0
+        tok_sentence_2_offset = None
     if example.offset_sentence_3 > 0:
         tok_sentence_3_offset = orig_to_tok_index[example.offset_sentence_3 + 1] - 1
     else:
-        tok_sentence_3_offset = 0
+        tok_sentence_3_offset = None
 
     spans = []
 
@@ -316,8 +316,14 @@ def fincausal_convert_example_to_features(example: FinCausalExample,
             doc_offset = 0
         else:
             doc_offset = sequence_added_tokens
-        sentence_2_offset = tok_sentence_2_offset - doc_start + doc_offset
-        sentence_3_offset = tok_sentence_3_offset - doc_start + doc_offset
+        if tok_sentence_2_offset is not None:
+            sentence_2_offset = tok_sentence_2_offset - doc_start + doc_offset
+        else:
+            sentence_2_offset = None
+        if tok_sentence_3_offset is not None:
+            sentence_3_offset = tok_sentence_3_offset - doc_start + doc_offset
+        else:
+            sentence_3_offset = None
         if is_training:
             # For training, if our document chunk does not contain an annotation
             # we throw it out, since there is nothing to predict.

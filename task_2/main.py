@@ -47,8 +47,9 @@ PER_GPU_EVAL_BATCH_SIZE = 8
 N_BEST_SIZE = 5
 MAX_ANSWER_LENGTH = 300
 SENTENCE_BOUNDARY_HEURISTIC = True
-FULL_SENTENCE_HEURISTIC = False
+FULL_SENTENCE_HEURISTIC = True
 SHARED_SENTENCE_HEURISTIC = False
+POST_CLASSIFICATION = False
 
 (MODEL_TYPE, MODEL_NAME_OR_PATH, DO_LOWER_CASE) = model_config.value
 PRACTICE_FILE = Path("E:/Coding/finNLP/task_2/data/fnp2020-fincausal2-task2.csv")
@@ -155,10 +156,14 @@ if __name__ == '__main__':
                                                     do_lower_case=DO_LOWER_CASE)
         model = model_class.from_pretrained(OUTPUT_DIR).to(device)
 
-        classifier_model = RoBERTaForCauseEffectClassification.from_pretrained(
-            'E:/Coding/finNLP/task_2/output/deepset/roberta-base-squad2_TRAIN_PRACTICE_EVAL_TRIAL_TRAIN_PRACTICE_EVAL_TRIAL_CLASSIFICATION')
-        classifier_tokenizer = RobertaTokenizer.from_pretrained(
-            'E:/Coding/finNLP/task_2/output/deepset/roberta-base-squad2_TRAIN_PRACTICE_EVAL_TRIAL_TRAIN_PRACTICE_EVAL_TRIAL_CLASSIFICATION')
+        if POST_CLASSIFICATION:
+            classifier_model = RoBERTaForCauseEffectClassification.from_pretrained(
+                'E:/Coding/finNLP/task_2/output/deepset/roberta-base-squad2_TRAIN_PRACTICE_EVAL_TRIAL_TRAIN_PRACTICE_EVAL_TRIAL_CLASSIFICATION')
+            classifier_tokenizer = RobertaTokenizer.from_pretrained(
+                'E:/Coding/finNLP/task_2/output/deepset/roberta-base-squad2_TRAIN_PRACTICE_EVAL_TRIAL_TRAIN_PRACTICE_EVAL_TRIAL_CLASSIFICATION')
+        else:
+            classifier_model = None
+            classifier_tokenizer = None
 
         result = evaluate(model=model,
                           tokenizer=tokenizer,

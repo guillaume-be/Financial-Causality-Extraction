@@ -66,6 +66,12 @@ def evaluate(model, tokenizer, device: torch.device, file_path: Path, model_type
     all_results = []
     start_time = timeit.default_timer()
 
+    sequence_added_tokens = (
+        tokenizer.max_len - tokenizer.max_len_single_sentence
+        if "roberta" in str(type(tokenizer)) or "camembert" in str(type(tokenizer))
+        else tokenizer.max_len - tokenizer.max_len_single_sentence - 1
+    )
+
     for batch in tqdm(eval_dataloader, desc="Evaluating", position=0, leave=True):
         model.eval()
         batch = tuple(t.to(device) for t in batch)
@@ -113,9 +119,10 @@ def evaluate(model, tokenizer, device: torch.device, file_path: Path, model_type
         output_prediction_file,
         csv_output_prediction_file,
         output_nbest_file,
+        sequence_added_tokens,
         sentence_boundary_heuristic,
         full_sentence_heuristic,
-        shared_sentence_heuristic
+        shared_sentence_heuristic,
     )
 
     # Run classifier to clean-up cause/effect confusions
@@ -144,7 +151,6 @@ def clean_up_cause_effect_confusion(predictions: collections.OrderedDict,
                                     tokenizer: PreTrainedTokenizer,
                                     max_seq_length=512):
     classifier = classifier.eval().cuda()
-    new_predictions = collections.OrderedDict()
     for (prediction_idx, prediction) in predictions.items():
         cause_input = tokenizer.encode_plus(text=prediction['text'],
                                             text_pair=prediction['cause_text'],
@@ -170,7 +176,7 @@ def clean_up_cause_effect_confusion(predictions: collections.OrderedDict,
         output = classifier(input_tensor)[0].detach().cpu()
         softmaxed_output = output.softmax(dim=1)[:, 0]
 
-        if softmaxed_output[0] / softmaxed_output[1] < 0.1:
+        if softmaxed_output[0] / softmaxed_output[1] < 0.5:
             effect = predictions[prediction_idx]['effect_text']
             cause = predictions[prediction_idx]['cause_text']
             predictions[prediction_idx]['cause_text'] = effect
@@ -274,9 +280,10 @@ def filter_impossible_spans(features,
                             unique_id_to_result: Dict,
                             n_best_size: int,
                             max_answer_length: int,
+                            sequence_added_tokens: int,
                             sentence_boundary_heuristic: bool = False,
                             full_sentence_heuristic: bool = False,
-                            shared_sentence_heuristic: bool = False
+                            shared_sentence_heuristic: bool = False,
                             ) -> List[_PrelimPrediction]:
     prelim_predictions = []
 
@@ -285,7 +292,7 @@ def filter_impossible_spans(features,
         assert isinstance(feature, FinCausalFeatures)
         assert isinstance(result, FinCausalResult)
         sentence_offsets = [offset for offset in [feature.sentence_2_offset, feature.sentence_3_offset] if
-                            offset > 1]
+                            offset is not None]
         start_indexes_cause = _get_best_indexes(result.start_cause_logits, n_best_size)
         end_indexes_cause = _get_best_indexes(result.end_cause_logits, n_best_size)
         start_logits_cause = result.start_cause_logits
@@ -347,9 +354,9 @@ def filter_impossible_spans(features,
                                 # Heuristics extending the prediction spans
                                 if full_sentence_heuristic or shared_sentence_heuristic:
                                     num_tokens = len(feature.tokens)
-                                    all_sentence_offsets = [2] + \
+                                    all_sentence_offsets = [sequence_added_tokens] + \
                                                            [offset + 1 for offset in sentence_offsets] + \
-                                                           [num_tokens - 1]
+                                                           [num_tokens]
                                     cause_sentences = []
                                     effect_sentences = []
                                     for sentence_idx in range(len(all_sentence_offsets) - 1):
@@ -373,7 +380,7 @@ def filter_impossible_spans(features,
                                         end_index_effect = max(
                                             [all_sentence_offsets[sent + 1] - 1 for sent in effect_sentences])
                                     # Heuristic (third rule): if a sentence contains only 2 clauses the span is
-                                    # extended as much as possible, prioritizing the cause.
+                                    # extended as much as possible.
                                     if not set(cause_sentences).isdisjoint(set(effect_sentences)) \
                                             and shared_sentence_heuristic \
                                             and len(cause_sentences) == 1 \
@@ -462,10 +469,10 @@ def compute_predictions_logits(
         output_prediction_file,
         csv_output_prediction_file,
         output_nbest_file,
+        sequence_added_tokens,
         sentence_boundary_heuristic,
         full_sentence_heuristic,
-        shared_sentence_heuristic
-):
+        shared_sentence_heuristic):
     """Write final predictions to the json file and log-odds of null if needed."""
     logger.info("Writing predictions to: %s" % output_prediction_file)
     logger.info("Writing nbest to: %s" % output_nbest_file)
@@ -488,9 +495,10 @@ def compute_predictions_logits(
                                                      unique_id_to_result,
                                                      n_best_size,
                                                      max_answer_length,
+                                                     sequence_added_tokens,
                                                      sentence_boundary_heuristic,
                                                      full_sentence_heuristic,
-                                                     shared_sentence_heuristic)
+                                                     shared_sentence_heuristic, )
         prelim_predictions = sorted(prelim_predictions,
                                     key=lambda x: (x.start_logit_cause + x.end_logit_cause +
                                                    x.start_logit_effect + x.end_logit_effect),
@@ -567,31 +575,6 @@ def _get_best_indexes(logits, n_best_size):
 def get_final_text(pred_text, orig_text, do_lower_case, verbose_logging=False):
     """Project the tokenized prediction back to the original text."""
 
-    # When we created the data, we kept track of the alignment between original
-    # (whitespace tokenized) tokens and our WordPiece tokenized tokens. So
-    # now `orig_text` contains the span of our original text corresponding to the
-    # span that we predicted.
-    #
-    # However, `orig_text` may contain extra characters that we don't want in
-    # our prediction.
-    #
-    # For example, let's say:
-    #   pred_text = steve smith
-    #   orig_text = Steve Smith's
-    #
-    # We don't want to return `orig_text` because it contains the extra "'s".
-    #
-    # We don't want to return `pred_text` because it's already been normalized
-    # (the SQuAD eval script also does punctuation stripping/lower casing but
-    # our tokenizer does additional normalization like stripping accent
-    # characters).
-    #
-    # What we really want to return is "Steve Smith".
-    #
-    # Therefore, we have to apply a semi-complicated alignment heuristic between
-    # `pred_text` and `orig_text` to get a character-to-character alignment. This
-    # can fail in certain cases in which case we just return `orig_text`.
-
     def _strip_spaces(text):
         ns_chars = []
         ns_to_s_map = collections.OrderedDict()
@@ -603,12 +586,7 @@ def get_final_text(pred_text, orig_text, do_lower_case, verbose_logging=False):
         ns_text = "".join(ns_chars)
         return ns_text, ns_to_s_map
 
-    # We first tokenize `orig_text`, strip whitespace from the result
-    # and `pred_text`, and check if they are the same length. If they are
-    # NOT the same length, the heuristic has failed. If they are the same
-    # length, we assume the characters are one-to-one aligned.
     tokenizer = BasicTokenizer(do_lower_case=do_lower_case)
-
     tok_text = " ".join(tokenizer.tokenize(orig_text))
 
     start_position = tok_text.find(pred_text)
