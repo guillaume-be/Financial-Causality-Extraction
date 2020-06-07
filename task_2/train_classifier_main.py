@@ -26,6 +26,9 @@ class ModelConfigurations(Enum):
     FinBERTSentiment = ('finbert-sentiment',
                         'E:/Coding/finNLP/task_2/pretrained/finbert_sentiment',
                         True)
+    FinBERT2 = ('finbert2',
+                'E:/Coding/finNLP/task_2/pretrained/finbert2',
+                True)
 
 
 model_config = ModelConfigurations.RoBERTaSquad
@@ -69,6 +72,7 @@ model_tokenizer_mapping = {
     'roberta': (RoBERTaForCauseEffectClassification, RobertaTokenizer),
     'finbert': (BertForCauseEffectClassification, BertTokenizer),
     'finbert-sentiment': (BertForCauseEffectClassification, BertTokenizer),
+    'finbert2': (BertForCauseEffectClassification, BertTokenizer),
 }
 
 model_class, tokenizer_class = model_tokenizer_mapping[MODEL_TYPE]
