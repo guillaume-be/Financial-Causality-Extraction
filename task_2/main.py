@@ -5,6 +5,7 @@ from pathlib import Path
 from enum import Enum
 import torch
 from transformers import BertTokenizer, DistilBertTokenizer, XLNetTokenizer, AutoTokenizer, RobertaTokenizer
+import torch_optimizer as optim
 
 from library.evaluation import evaluate
 from library.models.bert import BertForCauseEffect
@@ -42,6 +43,7 @@ LEARNING_RATE = 3e-5
 DIFFERENTIAL_LR_RATIO = 1.0
 NUM_TRAIN_EPOCHS = 3
 SAVE_MODEL = False
+OPTIMIZER_CLASS = optim.RAdam
 # Evaluation
 PER_GPU_EVAL_BATCH_SIZE = 8
 N_BEST_SIZE = 5
@@ -91,7 +93,8 @@ log_file = {'MODEL_TYPE': MODEL_TYPE,
             'MAX_ANSWER_LENGTH': MAX_ANSWER_LENGTH,
             'SENTENCE_BOUNDARY_HEURISTIC': SENTENCE_BOUNDARY_HEURISTIC,
             'FULL_SENTENCE_HEURISTIC': FULL_SENTENCE_HEURISTIC,
-            'SHARED_SENTENCE_HEURISTIC': SHARED_SENTENCE_HEURISTIC
+            'SHARED_SENTENCE_HEURISTIC': SHARED_SENTENCE_HEURISTIC,
+            'OPTIMIZER': str(OPTIMIZER_CLASS)
             }
 
 if __name__ == '__main__':
@@ -137,7 +140,9 @@ if __name__ == '__main__':
                                      learning_rate=LEARNING_RATE,
                                      differential_lr_ratio=DIFFERENTIAL_LR_RATIO,
                                      log_file=log_file,
-                                     overwrite_cache=OVERWRITE_CACHE)
+                                     overwrite_cache=OVERWRITE_CACHE,
+                                     optimizer_class=OPTIMIZER_CLASS
+                                     )
 
         if not os.path.exists(OUTPUT_DIR):
             os.makedirs(OUTPUT_DIR)

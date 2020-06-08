@@ -38,8 +38,8 @@ def train(train_dataset, model, tokenizer, train_batch_size: int,
           n_best_size: int, max_answer_length: int,
           sentence_boundary_heuristic: bool, full_sentence_heuristic: bool, shared_sentence_heuristic: bool,
           learning_rate: float, weight_decay: float = 0.0, differential_lr_ratio: float = 0.0,
-          adam_epsilon: float = 1e-8, max_grad_norm: float = 1.0,
-          overwrite_cache: bool = False):
+          adam_epsilon: float = 1e-8, max_grad_norm: float = 1.0, overwrite_cache: bool = False,
+          optimizer_class=AdamW):
     """ Train the model """
     tb_writer = SummaryWriter()
 
@@ -84,7 +84,7 @@ def train(train_dataset, model, tokenizer, train_batch_size: int,
             "weight_decay": 0.0
         },
     ]
-    optimizer = AdamW(optimizer_grouped_parameters, lr=learning_rate, eps=adam_epsilon)
+    optimizer = optimizer_class(optimizer_grouped_parameters, lr=learning_rate, eps=adam_epsilon)
     scheduler = get_linear_schedule_with_warmup(optimizer, num_warmup_steps=warmup_steps, num_training_steps=t_total)
 
     # Check if saved optimizer or scheduler states exist
