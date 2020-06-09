@@ -4,7 +4,8 @@ import os
 from pathlib import Path
 from enum import Enum
 import torch
-from transformers import BertTokenizer, DistilBertTokenizer, XLNetTokenizer, AutoTokenizer, RobertaTokenizer
+from transformers import BertTokenizer, DistilBertTokenizer, XLNetTokenizer, AutoTokenizer, RobertaTokenizer, AdamW, \
+    get_cosine_with_hard_restarts_schedule_with_warmup
 import torch_optimizer as optim
 
 from library.evaluation import evaluate
@@ -36,14 +37,17 @@ MAX_SEQ_LENGTH = 384
 DOC_STRIDE = 128
 OVERWRITE_CACHE = True
 # Training
-PER_GPU_BATCH_SIZE = 4  # 4 for BERT-based models, 12 for DistilBERT
-GRADIENT_ACCUMULATION_STEPS = 3  # 3 for BERT-base models, 1 for DistilBERT
+PER_GPU_BATCH_SIZE = 12  # 4 for BERT-based models, 12 for DistilBERT
+GRADIENT_ACCUMULATION_STEPS = 1  # 3 for BERT-base models, 1 for DistilBERT
 WARMUP_STEPS = 20
-LEARNING_RATE = 3e-5
+LEARNING_RATE = 4e-5
 DIFFERENTIAL_LR_RATIO = 1.0
-NUM_TRAIN_EPOCHS = 3
+NUM_TRAIN_EPOCHS = 10
 SAVE_MODEL = False
-OPTIMIZER_CLASS = optim.RAdam
+WEIGHT_DECAY = 0.0
+# OPTIMIZER_CLASS = optim.RAdam
+OPTIMIZER_CLASS = AdamW
+SCHEDULER_FUNCTION = get_cosine_with_hard_restarts_schedule_with_warmup
 # Evaluation
 PER_GPU_EVAL_BATCH_SIZE = 8
 N_BEST_SIZE = 5
@@ -94,7 +98,9 @@ log_file = {'MODEL_TYPE': MODEL_TYPE,
             'SENTENCE_BOUNDARY_HEURISTIC': SENTENCE_BOUNDARY_HEURISTIC,
             'FULL_SENTENCE_HEURISTIC': FULL_SENTENCE_HEURISTIC,
             'SHARED_SENTENCE_HEURISTIC': SHARED_SENTENCE_HEURISTIC,
-            'OPTIMIZER': str(OPTIMIZER_CLASS)
+            'OPTIMIZER': str(OPTIMIZER_CLASS),
+            'WEIGHT_DECAY': WEIGHT_DECAY,
+            'SCHEDULER_FUNCTION': str(SCHEDULER_FUNCTION)
             }
 
 if __name__ == '__main__':
@@ -141,7 +147,9 @@ if __name__ == '__main__':
                                      differential_lr_ratio=DIFFERENTIAL_LR_RATIO,
                                      log_file=log_file,
                                      overwrite_cache=OVERWRITE_CACHE,
-                                     optimizer_class=OPTIMIZER_CLASS
+                                     optimizer_class=OPTIMIZER_CLASS,
+                                     weight_decay=WEIGHT_DECAY,
+                                     schduler_function=SCHEDULER_FUNCTION,
                                      )
 
         if not os.path.exists(OUTPUT_DIR):
