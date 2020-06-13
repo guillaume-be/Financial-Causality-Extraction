@@ -22,6 +22,9 @@ from functools import partial
 from pathlib import Path
 from typing import Union, List
 
+import spacy
+from pysbd.utils import PySBDFactory
+
 import numpy as np
 import pandas as pd
 import torch
@@ -90,6 +93,10 @@ class FinCausalProcessor:
 
     @staticmethod
     def _create_examples(input_data):
+
+        nlp = spacy.blank('en')
+        nlp.add_pipe(PySBDFactory(nlp))
+
         examples = []
         for entry in tqdm(input_data.itertuples()):
             context_text = entry.Text
@@ -100,8 +107,15 @@ class FinCausalProcessor:
             cause_end_position_character = entry.Cause_End
             effect_start_position_character = entry.Effect_Start
             effect_end_position_character = entry.Effect_End
-            offset_sentence_2 = entry.Offset_Sentence2
-            offset_sentence_3 = entry.Offset_Sentence3
+
+            doc = nlp(entry.Text)
+            sentences = list(doc.sents)
+            offset_sentence_2 = np.nan
+            offset_sentence_3 = np.nan
+            if len(sentences) > 1:
+                offset_sentence_2 = sentences[0].end_char
+            if len(sentences) > 2:
+                offset_sentence_3 = sentences[1].end_char
 
             example = FinCausalExample(
                 example_id,

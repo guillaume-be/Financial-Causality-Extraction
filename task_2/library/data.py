@@ -65,6 +65,7 @@ class FinCausalExample:
             self.end_effect_position = char_to_word_offset[
                 min(effect_start_position_character + len(effect_text) - 1, len(char_to_word_offset) - 1)
             ]
+
         if pd.notna(offset_sentence_2):
             self.offset_sentence_2 = char_to_word_offset[int(offset_sentence_2)]
         else:
