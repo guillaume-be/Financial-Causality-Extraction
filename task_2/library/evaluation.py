@@ -490,7 +490,9 @@ def compute_predictions_logits(
 
     for (example_index, example) in enumerate(all_examples):
         features = example_index_to_features[example_index]
-
+        suffix_index = 0
+        if example.example_id.count('.') == 2:
+            suffix_index = int(example.example_id.split('.')[-1])
         prelim_predictions = filter_impossible_spans(features,
                                                      unique_id_to_result,
                                                      n_best_size,
@@ -499,7 +501,7 @@ def compute_predictions_logits(
                                                      sentence_boundary_heuristic,
                                                      full_sentence_heuristic,
                                                      shared_sentence_heuristic, )
-        prelim_predictions = sorted(prelim_predictions,
+        prelim_predictions = sorted(list(set(prelim_predictions)),
                                     key=lambda x: (x.start_logit_cause + x.end_logit_cause +
                                                    x.start_logit_effect + x.end_logit_effect),
                                     reverse=True)
@@ -539,10 +541,11 @@ def compute_predictions_logits(
             nbest_json.append(output)
 
         assert len(nbest_json) >= 1
-
-        all_predictions[example.example_id] = {"text": nbest_json[0]["text"],
-                                               "cause_text": nbest_json[0]["cause_text"],
-                                               "effect_text": nbest_json[0]["effect_text"]}
+        if suffix_index > 0:
+            suffix_index -= 1
+        all_predictions[example.example_id] = {"text": nbest_json[suffix_index]["text"],
+                                               "cause_text": nbest_json[suffix_index]["cause_text"],
+                                               "effect_text": nbest_json[suffix_index]["effect_text"]}
         all_nbest_json[example.example_id] = nbest_json
 
     with open(output_prediction_file, "w") as writer:

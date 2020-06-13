@@ -1,13 +1,11 @@
 import json
 import logging
 import os
-from functools import partial
 from pathlib import Path
 from enum import Enum
 import torch
 from transformers import BertTokenizer, DistilBertTokenizer, XLNetTokenizer, AutoTokenizer, RobertaTokenizer
-from transformers import AdamW, get_cosine_with_hard_restarts_schedule_with_warmup, get_cosine_schedule_with_warmup
-import torch_optimizer as optim
+from transformers import AdamW, get_cosine_schedule_with_warmup
 
 from library.evaluation import evaluate
 from library.models.bert import BertForCauseEffect
@@ -29,7 +27,7 @@ class ModelConfigurations(Enum):
 
 
 model_config = ModelConfigurations.RoBERTaSquad
-RUN_NAME = 'FULL_TRAIN_EVAL'
+RUN_NAME = 'FULL_TRAIN_EVAL_798'
 
 DO_TRAIN = False
 DO_EVAL = True
