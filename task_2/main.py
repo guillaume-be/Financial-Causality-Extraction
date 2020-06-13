@@ -1,11 +1,12 @@
 import json
 import logging
 import os
+from functools import partial
 from pathlib import Path
 from enum import Enum
 import torch
-from transformers import BertTokenizer, DistilBertTokenizer, XLNetTokenizer, AutoTokenizer, RobertaTokenizer, AdamW, \
-    get_cosine_with_hard_restarts_schedule_with_warmup
+from transformers import BertTokenizer, DistilBertTokenizer, XLNetTokenizer, AutoTokenizer, RobertaTokenizer
+from transformers import AdamW, get_cosine_with_hard_restarts_schedule_with_warmup, get_cosine_schedule_with_warmup
 import torch_optimizer as optim
 
 from library.evaluation import evaluate
@@ -28,7 +29,7 @@ class ModelConfigurations(Enum):
 
 
 model_config = ModelConfigurations.RoBERTaSquad
-RUN_NAME = 'TRAIN_PRACTICE_EVAL_TRIAL'
+RUN_NAME = 'FULL_TRAIN_EVAL'
 
 DO_TRAIN = False
 DO_EVAL = True
@@ -37,17 +38,19 @@ MAX_SEQ_LENGTH = 384
 DOC_STRIDE = 128
 OVERWRITE_CACHE = True
 # Training
-PER_GPU_BATCH_SIZE = 12  # 4 for BERT-based models, 12 for DistilBERT
-GRADIENT_ACCUMULATION_STEPS = 1  # 3 for BERT-base models, 1 for DistilBERT
+PER_GPU_BATCH_SIZE = 4  # 4 for BERT-based models, 12 for DistilBERT
+GRADIENT_ACCUMULATION_STEPS = 3  # 3 for BERT-base models, 1 for DistilBERT
 WARMUP_STEPS = 20
 LEARNING_RATE = 4e-5
 DIFFERENTIAL_LR_RATIO = 1.0
-NUM_TRAIN_EPOCHS = 10
+NUM_TRAIN_EPOCHS = 1
 SAVE_MODEL = False
 WEIGHT_DECAY = 0.0
 # OPTIMIZER_CLASS = optim.RAdam
 OPTIMIZER_CLASS = AdamW
-SCHEDULER_FUNCTION = get_cosine_with_hard_restarts_schedule_with_warmup
+# SCHEDULER_FUNCTION = partial(get_cosine_with_hard_restarts_schedule_with_warmup, num_cycles=2)
+# SCHEDULER_FUNCTION = get_linear_schedule_with_warmup
+SCHEDULER_FUNCTION = get_cosine_schedule_with_warmup
 # Evaluation
 PER_GPU_EVAL_BATCH_SIZE = 8
 N_BEST_SIZE = 5
@@ -60,13 +63,16 @@ POST_CLASSIFICATION = False
 (MODEL_TYPE, MODEL_NAME_OR_PATH, DO_LOWER_CASE) = model_config.value
 PRACTICE_FILE = Path("E:/Coding/finNLP/task_2/data/fnp2020-fincausal2-task2.csv")
 TRIAL_FILE = Path("E:/Coding/finNLP/task_2/data/fnp2020-fincausal-task2.csv")
+TRAIN_SPLIT_FILE = Path("E:/Coding/finNLP/task_2/data/fnp2020-train.csv")
+EVAL_SPLIT_FILE = Path("E:/Coding/finNLP/task_2/data/fnp2020-eval.csv")
+
 if RUN_NAME is not None:
     OUTPUT_DIR = str(Path('E:/Coding/finNLP/task_2/output') / (MODEL_NAME_OR_PATH + '_' + RUN_NAME))
 else:
     OUTPUT_DIR = str(Path('E:/Coding/finNLP/task_2/output') / MODEL_NAME_OR_PATH)
 
-TRAIN_FILE = PRACTICE_FILE
-PREDICT_FILE = TRIAL_FILE
+TRAIN_FILE = TRAIN_SPLIT_FILE
+PREDICT_FILE = EVAL_SPLIT_FILE
 
 model_tokenizer_mapping = {
     'distilbert': (DistilBertForCauseEffect, DistilBertTokenizer),
@@ -149,7 +155,7 @@ if __name__ == '__main__':
                                      overwrite_cache=OVERWRITE_CACHE,
                                      optimizer_class=OPTIMIZER_CLASS,
                                      weight_decay=WEIGHT_DECAY,
-                                     schduler_function=SCHEDULER_FUNCTION,
+                                     scheduler_function=SCHEDULER_FUNCTION,
                                      )
 
         if not os.path.exists(OUTPUT_DIR):
@@ -164,9 +170,7 @@ if __name__ == '__main__':
             json.dump(log_file, f, indent=4)
 
     if DO_EVAL:
-        print(OUTPUT_DIR)
-        tokenizer = tokenizer_class.from_pretrained(OUTPUT_DIR,
-                                                    do_lower_case=DO_LOWER_CASE)
+        tokenizer = tokenizer_class.from_pretrained(OUTPUT_DIR, do_lower_case=DO_LOWER_CASE)
         model = model_class.from_pretrained(OUTPUT_DIR).to(device)
 
         if POST_CLASSIFICATION:
@@ -197,3 +201,5 @@ if __name__ == '__main__':
                           classifier_model=classifier_model,
                           classifier_tokenizer=classifier_tokenizer
                           )
+
+        print("done")

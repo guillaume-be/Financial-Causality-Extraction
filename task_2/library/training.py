@@ -23,7 +23,7 @@ import torch
 from torch.utils.data import RandomSampler, DataLoader
 from torch.utils.tensorboard import SummaryWriter
 from tqdm import trange, tqdm
-from transformers import AdamW, get_linear_schedule_with_warmup
+from transformers import AdamW, get_linear_schedule_with_warmup, get_cosine_with_hard_restarts_schedule_with_warmup
 
 from .evaluation import evaluate
 
@@ -39,7 +39,7 @@ def train(train_dataset, model, tokenizer, train_batch_size: int,
           sentence_boundary_heuristic: bool, full_sentence_heuristic: bool, shared_sentence_heuristic: bool,
           learning_rate: float, weight_decay: float = 0.0, differential_lr_ratio: float = 0.0,
           adam_epsilon: float = 1e-8, max_grad_norm: float = 1.0, overwrite_cache: bool = False,
-          optimizer_class=AdamW, scheduler_function=get_linear_schedule_with_warmup):
+          optimizer_class = AdamW, scheduler_function=get_linear_schedule_with_warmup):
     """ Train the model """
     tb_writer = SummaryWriter()
 
@@ -85,8 +85,11 @@ def train(train_dataset, model, tokenizer, train_batch_size: int,
         },
     ]
     optimizer = optimizer_class(optimizer_grouped_parameters, lr=learning_rate, eps=adam_epsilon)
-    scheduler = scheduler_function(optimizer, num_warmup_steps=warmup_steps, num_training_steps=t_total)
-
+    try:
+        scheduler = scheduler_function(optimizer, num_warmup_steps=warmup_steps, num_training_steps=t_total)
+        # scheduler = get_cosine_with_hard_restarts_schedule_with_warmup(optimizer, num_warmup_steps=warmup_steps, num_cycles=3, num_training_steps=t_total)
+    except:
+        scheduler = scheduler_function(optimizer, num_warmup_steps=warmup_steps)
     # Check if saved optimizer or scheduler states exist
     if os.path.isfile(os.path.join(model_name_or_path, "optimizer.pt")) and os.path.isfile(
             os.path.join(model_name_or_path, "scheduler.pt")
@@ -128,11 +131,12 @@ def train(train_dataset, model, tokenizer, train_batch_size: int,
     tr_loss, logging_loss = 0.0, 0.0
     model.zero_grad()
     train_iterator = trange(epochs_trained, int(num_train_epochs), desc="Epoch")
+    current_f1 = 0
 
     for _ in train_iterator:
-        epoch_iterator = tqdm(train_dataloader, desc="Iteration", position=0, leave=True)
+        epoch_iterator = tqdm(train_dataloader, desc=f"Iteration Loss: {tr_loss/global_step}", position=0, leave=True)
         for step, batch in enumerate(epoch_iterator):
-
+            epoch_iterator.set_description(f"Iteration Loss: {tr_loss/global_step}")
             # Skip past any already trained steps if resuming training
             if steps_trained_in_current_epoch > 0:
                 steps_trained_in_current_epoch -= 1
@@ -172,49 +176,49 @@ def train(train_dataset, model, tokenizer, train_batch_size: int,
                 model.zero_grad()
                 global_step += 1
 
-                # Log metrics
-                if (logging_steps > 0 and global_step % logging_steps == 0) or \
-                        global_step % (len(train_dataloader) // gradient_accumulation_steps) == 0:
-                    if evaluate_during_training:
-                        metrics = evaluate(model=model,
-                                           tokenizer=tokenizer,
-                                           device=device,
-                                           file_path=predict_file,
-                                           model_type=model_type,
-                                           model_name_or_path=model_name_or_path,
-                                           max_seq_length=max_seq_length,
-                                           doc_stride=doc_stride,
-                                           eval_batch_size=eval_batch_size,
-                                           output_dir=output_dir,
-                                           n_best_size=n_best_size,
-                                           max_answer_length=max_answer_length,
-                                           sentence_boundary_heuristic=sentence_boundary_heuristic,
-                                           full_sentence_heuristic=full_sentence_heuristic,
-                                           shared_sentence_heuristic=shared_sentence_heuristic,
-                                           overwrite_cache=overwrite_cache)
-                        log_file[f'step_{global_step}'] = metrics
-                    tb_writer.add_scalar("lr", scheduler.get_last_lr()[0], global_step)
-                    tb_writer.add_scalar("loss", (tr_loss - logging_loss) / logging_steps, global_step)
-                    logging_loss = tr_loss
-
-                # Save model checkpoint
-                if (save_steps > 0 and global_step % save_steps == 0) or \
-                        (save_steps > 0 and global_step % (len(train_dataloader) // gradient_accumulation_steps) == 0):
-                    _output_dir = os.path.join(output_dir, "checkpoint-{}".format(global_step))
-                    if not os.path.exists(_output_dir):
-                        os.makedirs(_output_dir)
-                    # Take care of distributed/parallel training
-                    model_to_save = model.module if hasattr(model, "module") else model
-                    model_to_save.save_pretrained(_output_dir)
-                    tokenizer.save_pretrained(_output_dir)
-                    logger.info("Saving model checkpoint to %s", _output_dir)
-
             if max_steps is not None and global_step > max_steps:
                 epoch_iterator.close()
                 break
+
+        # Log metrics
+        if evaluate_during_training:
+            metrics = evaluate(model=model,
+                                tokenizer=tokenizer,
+                                device=device,
+                                file_path=predict_file,
+                                model_type=model_type,
+                                model_name_or_path=model_name_or_path,
+                                max_seq_length=max_seq_length,
+                                doc_stride=doc_stride,
+                                eval_batch_size=eval_batch_size,
+                                output_dir=output_dir,
+                                n_best_size=n_best_size,
+                                max_answer_length=max_answer_length,
+                                sentence_boundary_heuristic=sentence_boundary_heuristic,
+                                full_sentence_heuristic=full_sentence_heuristic,
+                                shared_sentence_heuristic=shared_sentence_heuristic,
+                                overwrite_cache=overwrite_cache)
+            log_file[f'step_{global_step}'] = metrics
+
+            # # Save model checkpoint
+            # if metrics['F1score:'] > current_f1:
+            #     current_f1 = metrics['F1score:']
+            _output_dir = os.path.join(output_dir, "checkpoint-{}".format(global_step))
+            if not os.path.exists(_output_dir):
+                os.makedirs(_output_dir)
+            # Take care of distributed/parallel training
+            model_to_save = model.module if hasattr(model, "module") else model
+            model_to_save.save_pretrained(_output_dir)
+            tokenizer.save_pretrained(_output_dir)
+            logger.info("Best F1 score: saving model checkpoint to %s", _output_dir)
+
+            tb_writer.add_scalar("lr", scheduler.get_last_lr()[0], global_step)
+            tb_writer.add_scalar("loss", (tr_loss - logging_loss) / logging_steps, global_step)
+            logging_loss = tr_loss
         if max_steps is not None and global_step > max_steps:
             train_iterator.close()
             break
+
 
     tb_writer.close()
 
