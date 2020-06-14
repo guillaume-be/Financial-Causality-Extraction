@@ -42,11 +42,11 @@ def to_list(tensor):
     return tensor.detach().cpu().tolist()
 
 
-def evaluate(model, tokenizer, device: torch.device, file_path: Path, model_type: str, model_name_or_path: str,
-             max_seq_length: int, doc_stride: int, eval_batch_size: int, output_dir: str,
-             n_best_size: int, max_answer_length: int,
-             sentence_boundary_heuristic: bool, full_sentence_heuristic: bool, shared_sentence_heuristic: bool,
-             overwrite_cache: bool = False, prefix="", classifier_model=None, classifier_tokenizer=None):
+def predict(model, tokenizer, device: torch.device, file_path: Path, model_type: str, model_name_or_path: str,
+            max_seq_length: int, doc_stride: int, eval_batch_size: int, output_dir: str,
+            n_best_size: int, max_answer_length: int,
+            sentence_boundary_heuristic: bool, full_sentence_heuristic: bool, shared_sentence_heuristic: bool,
+            overwrite_cache: bool = False, prefix="", classifier_model=None, classifier_tokenizer=None):
     dataset, examples, features = load_and_cache_examples(file_path, model_name_or_path, tokenizer,
                                                           max_seq_length, doc_stride,
                                                           output_examples=True, evaluate=True,
@@ -131,6 +131,20 @@ def evaluate(model, tokenizer, device: torch.device, file_path: Path, model_type
                                                       classifier_model,
                                                       classifier_tokenizer,
                                                       max_seq_length)
+
+    return examples, predictions
+
+
+def evaluate(model, tokenizer, device: torch.device, file_path: Path, model_type: str, model_name_or_path: str,
+             max_seq_length: int, doc_stride: int, eval_batch_size: int, output_dir: str,
+             n_best_size: int, max_answer_length: int,
+             sentence_boundary_heuristic: bool, full_sentence_heuristic: bool, shared_sentence_heuristic: bool,
+             overwrite_cache: bool = False, prefix="", classifier_model=None, classifier_tokenizer=None):
+
+    examples, predictions = predict(model, tokenizer, device, file_path, model_type, model_name_or_path, max_seq_length,
+                                    doc_stride, eval_batch_size, output_dir, n_best_size, max_answer_length,
+                                    sentence_boundary_heuristic, full_sentence_heuristic, shared_sentence_heuristic,
+                                    overwrite_cache, prefix, classifier_model, classifier_tokenizer)
 
     # Compute the F1 and exact scores.
     results, correct, wrong = compute_metrics(examples, predictions)

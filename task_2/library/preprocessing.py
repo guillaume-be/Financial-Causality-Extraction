@@ -101,12 +101,20 @@ class FinCausalProcessor:
         for entry in tqdm(input_data.itertuples()):
             context_text = entry.Text
             example_id = entry.Index
-            cause_text = entry.Cause
-            effect_text = entry.Effect
-            cause_start_position_character = entry.Cause_Start
-            cause_end_position_character = entry.Cause_End
-            effect_start_position_character = entry.Effect_Start
-            effect_end_position_character = entry.Effect_End
+            if len(entry) > 2:
+                cause_text = entry.Cause
+                effect_text = entry.Effect
+                cause_start_position_character = entry.Cause_Start
+                cause_end_position_character = entry.Cause_End
+                effect_start_position_character = entry.Effect_Start
+                effect_end_position_character = entry.Effect_End
+            else:
+                cause_text = ""
+                effect_text = ""
+                cause_start_position_character = 0
+                cause_end_position_character = 0
+                effect_start_position_character = 0
+                effect_end_position_character = 0
 
             doc = nlp(entry.Text)
             sentences = list(doc.sents)

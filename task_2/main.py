@@ -7,7 +7,7 @@ import torch
 from transformers import BertTokenizer, DistilBertTokenizer, XLNetTokenizer, AutoTokenizer, RobertaTokenizer
 from transformers import AdamW, get_cosine_schedule_with_warmup
 
-from library.evaluation import evaluate
+from library.evaluation import evaluate, predict
 from library.models.bert import BertForCauseEffect
 from library.models.distilbert import DistilBertForCauseEffect
 from library.models.roberta import RoBERTaForCauseEffect, RoBERTaForCauseEffectClassification
@@ -27,10 +27,11 @@ class ModelConfigurations(Enum):
 
 
 model_config = ModelConfigurations.RoBERTaSquad
-RUN_NAME = 'FULL_TRAIN_EVAL_798'
+RUN_NAME = 'FULL_TRAIN_EVAL_880'
 
 DO_TRAIN = False
 DO_EVAL = True
+DO_TEST = False
 # Preprocessing
 MAX_SEQ_LENGTH = 384
 DOC_STRIDE = 128
@@ -38,10 +39,10 @@ OVERWRITE_CACHE = True
 # Training
 PER_GPU_BATCH_SIZE = 4  # 4 for BERT-based models, 12 for DistilBERT
 GRADIENT_ACCUMULATION_STEPS = 3  # 3 for BERT-base models, 1 for DistilBERT
-WARMUP_STEPS = 20
-LEARNING_RATE = 4e-5
+WARMUP_STEPS = 100
+LEARNING_RATE = 2e-5
 DIFFERENTIAL_LR_RATIO = 1.0
-NUM_TRAIN_EPOCHS = 1
+NUM_TRAIN_EPOCHS = 10
 SAVE_MODEL = False
 WEIGHT_DECAY = 0.0
 # OPTIMIZER_CLASS = optim.RAdam
@@ -63,6 +64,7 @@ PRACTICE_FILE = Path("E:/Coding/finNLP/task_2/data/fnp2020-fincausal2-task2.csv"
 TRIAL_FILE = Path("E:/Coding/finNLP/task_2/data/fnp2020-fincausal-task2.csv")
 TRAIN_SPLIT_FILE = Path("E:/Coding/finNLP/task_2/data/fnp2020-train.csv")
 EVAL_SPLIT_FILE = Path("E:/Coding/finNLP/task_2/data/fnp2020-eval.csv")
+TEST_FILE = Path("E:/Coding/finNLP/task_2/data/task2.csv")
 
 if RUN_NAME is not None:
     OUTPUT_DIR = str(Path('E:/Coding/finNLP/task_2/output') / (MODEL_NAME_OR_PATH + '_' + RUN_NAME))
@@ -70,7 +72,7 @@ else:
     OUTPUT_DIR = str(Path('E:/Coding/finNLP/task_2/output') / MODEL_NAME_OR_PATH)
 
 TRAIN_FILE = TRAIN_SPLIT_FILE
-PREDICT_FILE = EVAL_SPLIT_FILE
+EVAL_FILE = EVAL_SPLIT_FILE
 
 model_tokenizer_mapping = {
     'distilbert': (DistilBertForCauseEffect, DistilBertTokenizer),
@@ -130,7 +132,7 @@ if __name__ == '__main__':
                                      model_type=MODEL_TYPE,
                                      model_name_or_path=MODEL_NAME_OR_PATH,
                                      output_dir=OUTPUT_DIR,
-                                     predict_file=PREDICT_FILE,
+                                     predict_file=EVAL_FILE,
                                      device=device,
                                      max_steps=None,
                                      gradient_accumulation_steps=GRADIENT_ACCUMULATION_STEPS,
@@ -183,7 +185,7 @@ if __name__ == '__main__':
         result = evaluate(model=model,
                           tokenizer=tokenizer,
                           device=device,
-                          file_path=PREDICT_FILE,
+                          file_path=EVAL_FILE,
                           model_type=MODEL_TYPE,
                           model_name_or_path=MODEL_NAME_OR_PATH,
                           max_seq_length=MAX_SEQ_LENGTH,
@@ -199,5 +201,38 @@ if __name__ == '__main__':
                           classifier_model=classifier_model,
                           classifier_tokenizer=classifier_tokenizer
                           )
+
+        print("done")
+
+    if DO_TEST:
+        tokenizer = tokenizer_class.from_pretrained(OUTPUT_DIR, do_lower_case=DO_LOWER_CASE)
+        model = model_class.from_pretrained(OUTPUT_DIR).to(device)
+
+        if POST_CLASSIFICATION:
+            classifier_model = RoBERTaForCauseEffectClassification.from_pretrained(
+                'E:/Coding/finNLP/task_2/output/deepset/roberta-base-squad2_TRAIN_PRACTICE_EVAL_TRIAL_TRAIN_PRACTICE_EVAL_TRIAL_CLASSIFICATION')
+            classifier_tokenizer = RobertaTokenizer.from_pretrained(
+                'E:/Coding/finNLP/task_2/output/deepset/roberta-base-squad2_TRAIN_PRACTICE_EVAL_TRIAL_TRAIN_PRACTICE_EVAL_TRIAL_CLASSIFICATION')
+        else:
+            classifier_model = None
+            classifier_tokenizer = None
+
+        result = predict(model=model,
+                         tokenizer=tokenizer,
+                         device=device,
+                         file_path=TEST_FILE,
+                         model_type=MODEL_TYPE,
+                         model_name_or_path=MODEL_NAME_OR_PATH,
+                         max_seq_length=MAX_SEQ_LENGTH,
+                         doc_stride=DOC_STRIDE,
+                         eval_batch_size=PER_GPU_EVAL_BATCH_SIZE,
+                         output_dir=OUTPUT_DIR,
+                         n_best_size=N_BEST_SIZE,
+                         max_answer_length=MAX_ANSWER_LENGTH,
+                         sentence_boundary_heuristic=SENTENCE_BOUNDARY_HEURISTIC,
+                         full_sentence_heuristic=FULL_SENTENCE_HEURISTIC,
+                         shared_sentence_heuristic=SHARED_SENTENCE_HEURISTIC,
+                         overwrite_cache=OVERWRITE_CACHE,
+                         )
 
         print("done")
