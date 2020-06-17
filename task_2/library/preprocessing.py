@@ -254,11 +254,7 @@ def fincausal_convert_example_to_features(example: FinCausalExample,
 
     spans = []
 
-    sequence_added_tokens = (
-        tokenizer.max_len - tokenizer.max_len_single_sentence
-        if "roberta" in str(type(tokenizer)) or "camembert" in str(type(tokenizer))
-        else tokenizer.max_len - tokenizer.max_len_single_sentence - 1
-    )
+    sequence_added_tokens = tokenizer.max_len - tokenizer.max_len_single_sentence
 
     span_doc_tokens = all_doc_tokens
     while len(spans) * doc_stride < len(all_doc_tokens):

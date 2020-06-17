@@ -66,11 +66,7 @@ def predict(model, tokenizer, device: torch.device, file_path: Path, model_type:
     all_results = []
     start_time = timeit.default_timer()
 
-    sequence_added_tokens = (
-        tokenizer.max_len - tokenizer.max_len_single_sentence
-        if "roberta" in str(type(tokenizer)) or "camembert" in str(type(tokenizer))
-        else tokenizer.max_len - tokenizer.max_len_single_sentence - 1
-    )
+    sequence_added_tokens = tokenizer.max_len - tokenizer.max_len_single_sentence
 
     for batch in tqdm(eval_dataloader, desc="Evaluating", position=0, leave=True):
         model.eval()

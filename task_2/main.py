@@ -21,13 +21,17 @@ logger = logging.getLogger(__name__)
 
 class ModelConfigurations(Enum):
     BertSquad = ('bert', 'deepset/bert-base-cased-squad2', False)
+    BertSquad2 = ('bert', 'deepset/bert-large-uncased-whole-word-masking-squad2', True)
     DistilBertSquad = ('distilbert', 'distilbert-base-uncased-distilled-squad', True)
     RoBERTaSquad = ('roberta', 'deepset/roberta-base-squad2', False)
     XLNetBase = ('xlnet', 'xlnet-base-cased', False)
 
 
 model_config = ModelConfigurations.RoBERTaSquad
-RUN_NAME = 'FULL_TRAIN_EVAL_880'
+RUN_NAME = 'FULL_TRAIN_EVAL_889'
+
+# model_config = ModelConfigurations.DistilBertSquad
+# RUN_NAME = 'FULL_TRAIN_EVAL'
 
 DO_TRAIN = False
 DO_EVAL = True
@@ -39,11 +43,11 @@ OVERWRITE_CACHE = True
 # Training
 PER_GPU_BATCH_SIZE = 4  # 4 for BERT-based models, 12 for DistilBERT
 GRADIENT_ACCUMULATION_STEPS = 3  # 3 for BERT-base models, 1 for DistilBERT
-WARMUP_STEPS = 100
-LEARNING_RATE = 2e-5
+WARMUP_STEPS = 50
+LEARNING_RATE = 3e-5
 DIFFERENTIAL_LR_RATIO = 1.0
-NUM_TRAIN_EPOCHS = 10
-SAVE_MODEL = False
+NUM_TRAIN_EPOCHS = 5
+SAVE_MODEL = True
 WEIGHT_DECAY = 0.0
 # OPTIMIZER_CLASS = optim.RAdam
 OPTIMIZER_CLASS = AdamW
@@ -64,6 +68,10 @@ PRACTICE_FILE = Path("E:/Coding/finNLP/task_2/data/fnp2020-fincausal2-task2.csv"
 TRIAL_FILE = Path("E:/Coding/finNLP/task_2/data/fnp2020-fincausal-task2.csv")
 TRAIN_SPLIT_FILE = Path("E:/Coding/finNLP/task_2/data/fnp2020-train.csv")
 EVAL_SPLIT_FILE = Path("E:/Coding/finNLP/task_2/data/fnp2020-eval.csv")
+# TRAIN_SPLIT_FILE = Path("E:/Coding/finNLP/task_2/data/fnp2020-train-90pc.csv")
+# EVAL_SPLIT_FILE = Path("E:/Coding/finNLP/task_2/data/fnp2020-eval-90pc.csv")
+# TRAIN_SPLIT_FILE = Path("E:/Coding/finNLP/task_2/data/fnp2020-train-90pc.csv")
+# EVAL_SPLIT_FILE = Path("E:/Coding/finNLP/task_2/data/fnp2020-eval-90pc_subset.csv")
 TEST_FILE = Path("E:/Coding/finNLP/task_2/data/task2.csv")
 
 if RUN_NAME is not None:
