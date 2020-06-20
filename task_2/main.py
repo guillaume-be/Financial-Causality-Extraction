@@ -4,10 +4,12 @@ import os
 from pathlib import Path
 from enum import Enum
 import torch
-from transformers import BertTokenizer, DistilBertTokenizer, XLNetTokenizer, AutoTokenizer, RobertaTokenizer
+from transformers import BertTokenizer, DistilBertTokenizer, XLNetTokenizer, AutoTokenizer, RobertaTokenizer, \
+    AlbertTokenizer
 from transformers import AdamW, get_cosine_schedule_with_warmup
 
 from library.evaluation import evaluate, predict
+from library.models.albert import AlbertForCauseEffect
 from library.models.bert import BertForCauseEffect
 from library.models.distilbert import DistilBertForCauseEffect
 from library.models.roberta import RoBERTaForCauseEffect, RoBERTaForCauseEffectClassification
@@ -25,6 +27,7 @@ class ModelConfigurations(Enum):
     DistilBertSquad = ('distilbert', 'distilbert-base-uncased-distilled-squad', True)
     RoBERTaSquad = ('roberta', 'deepset/roberta-base-squad2', False)
     XLNetBase = ('xlnet', 'xlnet-base-cased', False)
+    AlbertSquad = ('albert', 'twmkn9/albert-base-v2-squad2', True)
 
 
 model_config = ModelConfigurations.RoBERTaSquad
@@ -87,6 +90,7 @@ model_tokenizer_mapping = {
     'bert': (BertForCauseEffect, BertTokenizer),
     'roberta': (RoBERTaForCauseEffect, RobertaTokenizer),
     'xlnet': (XLNetForCauseEffect, XLNetTokenizer),
+    'albert': (AlbertForCauseEffect, AlbertTokenizer),
 }
 
 model_class, tokenizer_class = model_tokenizer_mapping[MODEL_TYPE]
