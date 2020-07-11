@@ -136,7 +136,6 @@ def evaluate(model, tokenizer, device: torch.device, file_path: Path, model_type
              n_best_size: int, max_answer_length: int,
              sentence_boundary_heuristic: bool, full_sentence_heuristic: bool, shared_sentence_heuristic: bool,
              overwrite_cache: bool = False, prefix="", classifier_model=None, classifier_tokenizer=None):
-
     examples, predictions = predict(model, tokenizer, device, file_path, model_type, model_name_or_path, max_seq_length,
                                     doc_stride, eval_batch_size, output_dir, n_best_size, max_answer_length,
                                     sentence_boundary_heuristic, full_sentence_heuristic, shared_sentence_heuristic,
@@ -170,6 +169,7 @@ def clean_up_cause_effect_confusion(predictions: collections.OrderedDict,
                                             stride=0,
                                             truncation_strategy="only_first",
                                             return_token_type_ids=False,
+                                            truncation=True,
                                             return_tensors='pt'
                                             )
         effect_input = tokenizer.encode_plus(text=prediction['text'],
@@ -180,6 +180,7 @@ def clean_up_cause_effect_confusion(predictions: collections.OrderedDict,
                                              stride=0,
                                              truncation_strategy="only_first",
                                              return_token_type_ids=False,
+                                             truncation=True,
                                              return_tensors='pt'
                                              )
         input_tensor = torch.stack([cause_input.input_ids.squeeze(), effect_input.input_ids.squeeze()]).cuda()
@@ -276,13 +277,27 @@ class SpanType(Enum):
 
 _PrelimPrediction = collections.namedtuple(
     "PrelimPrediction", ["feature_index",
-                         "start_index_cause", "end_index_cause", "start_logit_cause", "end_logit_cause",
-                         "start_index_effect", "end_index_effect", "start_logit_effect", "end_logit_effect"]
+                         "start_index_cause",
+                         "end_index_cause",
+                         "start_logit_cause",
+                         "end_logit_cause",
+                         "start_index_effect",
+                         "end_index_effect",
+                         "start_logit_effect",
+                         "end_logit_effect"]
 )
 
 _NbestPrediction = collections.namedtuple(
-    "NbestPrediction", ["text_cause", "start_logit_cause", "end_logit_cause",
-                        "text_effect", "start_logit_effect", "end_logit_effect"]
+    "NbestPrediction", ["text_cause",
+                        "start_index_cause",
+                        "end_index_cause",
+                        "start_logit_cause",
+                        "end_logit_cause",
+                        "text_effect",
+                        "start_index_effect",
+                        "end_index_effect",
+                        "start_logit_effect",
+                        "end_logit_effect"]
 )
 
 
@@ -461,12 +476,23 @@ def get_predictions(preliminary_predictions: List[_PrelimPrediction], n_best_siz
             final_text_cause = final_text_effect = ""
             seen_predictions_cause[final_text_cause] = True
             seen_predictions_cause[final_text_effect] = True
+            orig_doc_start_cause = prediction.start_index_cause
+            orig_doc_end_cause = prediction.end_index_cause
+            orig_doc_start_effect = prediction.end_index_effect
+            orig_doc_end_effect = prediction.end_index_effect
 
         nbest.append(
-            _NbestPrediction(text_cause=final_text_cause, start_logit_cause=prediction.start_logit_cause,
+            _NbestPrediction(text_cause=final_text_cause,
+                             start_logit_cause=prediction.start_logit_cause,
                              end_logit_cause=prediction.end_logit_cause,
-                             text_effect=final_text_effect, start_logit_effect=prediction.start_logit_effect,
-                             end_logit_effect=prediction.end_logit_effect))
+                             start_index_cause=orig_doc_start_cause,
+                             end_index_cause=orig_doc_end_cause,
+                             text_effect=final_text_effect,
+                             start_logit_effect=prediction.start_logit_effect,
+                             end_logit_effect=prediction.end_logit_effect,
+                             start_index_effect=orig_doc_start_effect,
+                             end_index_effect=orig_doc_end_effect,
+                             ))
     return nbest
 
 
@@ -538,17 +564,26 @@ def compute_predictions_logits(
         probs = _compute_softmax(total_scores)
 
         nbest_json = []
+        current_example_spans = []
         for (i, entry) in enumerate(nbest):
             output = collections.OrderedDict()
             output["text"] = example.context_text
             output["probability"] = probs[i]
             output["cause_text"] = entry.text_cause
-            output["cause_start_logit"] = entry.start_logit_cause
-            output["cause_end_logit"] = entry.end_logit_cause
+            output["cause_start_index"] = entry.start_index_cause
+            output["cause_end_index"] = entry.end_index_cause
+            output["cause_start_score"] = entry.start_logit_cause
+            output["cause_end_score"] = entry.end_logit_cause
             output["effect_text"] = entry.text_effect
-            output["effect_start_logit"] = entry.start_logit_effect
-            output["effect_end_logit"] = entry.end_logit_effect
+            output["effect_start_score"] = entry.start_logit_effect
+            output["effect_end_score"] = entry.end_logit_effect
+            output["effect_start_index"] = entry.start_index_effect
+            output["effect_end_index"] = entry.end_index_effect
+            new_span = SpanCombination(start_cause=entry.start_index_cause, end_cause=entry.end_index_cause,
+                                       start_effect=entry.start_index_effect, end_effect=entry.end_index_effect)
+            output["is_new"] = all([new_span != other for other in current_example_spans])
             nbest_json.append(output)
+            current_example_spans.append(new_span)
 
         assert len(nbest_json) >= 1
         if suffix_index > 0:
@@ -571,6 +606,25 @@ def compute_predictions_logits(
         writer.write(json.dumps(all_nbest_json, indent=4) + "\n")
 
     return all_predictions
+
+
+class SpanCombination:
+    def __init__(self, start_cause: int, end_cause: int, start_effect: int, end_effect: int):
+        self.start_cause = start_cause
+        self.start_effect = start_effect
+        self.end_cause = end_cause
+        self.end_effect = end_effect
+
+    def __eq__(self, other):
+        overlapping_cause = (self.start_cause <= other.start_cause <= self.end_cause) or \
+                            (self.start_cause <= other.end_cause <= self.end_cause) or \
+                            (self.start_effect <= other.start_cause <= self.end_effect) or \
+                            (self.start_effect <= other.end_cause <= self.end_effect)
+        overlapping_effect = (self.start_effect <= other.start_effect <= self.end_effect) or \
+                             (self.start_effect <= other.end_effect <= self.end_effect) or \
+                             (self.start_cause <= other.start_effect <= self.end_cause) or \
+                             (self.start_cause <= other.end_effect <= self.end_cause)
+        return overlapping_cause and overlapping_effect
 
 
 def _get_best_indexes(logits, n_best_size):

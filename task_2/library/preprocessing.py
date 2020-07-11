@@ -265,6 +265,7 @@ def fincausal_convert_example_to_features(example: FinCausalExample,
                                              pad_to_max_length=True,
                                              stride=max_seq_length - doc_stride - sequence_added_tokens - 1,
                                              truncation_strategy="only_first",
+                                             truncation=True,
                                              return_token_type_ids=True,
                                              )
 
