@@ -26,12 +26,13 @@ class ModelConfigurations(Enum):
     BertSquad2 = ('bert', 'deepset/bert-large-uncased-whole-word-masking-squad2', True)
     DistilBertSquad = ('distilbert', 'distilbert-base-uncased-distilled-squad', True)
     RoBERTaSquad = ('roberta', 'deepset/roberta-base-squad2', False)
+    RoBERTaSquadLarge = ('roberta', 'ahotrod/roberta_large_squad2', False)
     XLNetBase = ('xlnet', 'xlnet-base-cased', False)
     AlbertSquad = ('albert', 'twmkn9/albert-base-v2-squad2', True)
 
 
-model_config = ModelConfigurations.RoBERTaSquad
-RUN_NAME = 'FULL_TRAIN_EVAL_889'
+model_config = ModelConfigurations.RoBERTaSquadLarge
+RUN_NAME = 'FULL_90pc_TRAIN_EVAL_908_0a3758f13dbbb881101a087a55d31c231b482f60'
 
 # model_config = ModelConfigurations.DistilBertSquad
 # RUN_NAME = 'FULL_TRAIN_EVAL'
@@ -69,10 +70,10 @@ POST_CLASSIFICATION = False
 (MODEL_TYPE, MODEL_NAME_OR_PATH, DO_LOWER_CASE) = model_config.value
 PRACTICE_FILE = Path("E:/Coding/finNLP/task_2/data/fnp2020-fincausal2-task2.csv")
 TRIAL_FILE = Path("E:/Coding/finNLP/task_2/data/fnp2020-fincausal-task2.csv")
-TRAIN_SPLIT_FILE = Path("E:/Coding/finNLP/task_2/data/fnp2020-train.csv")
-EVAL_SPLIT_FILE = Path("E:/Coding/finNLP/task_2/data/fnp2020-eval.csv")
-# TRAIN_SPLIT_FILE = Path("E:/Coding/finNLP/task_2/data/fnp2020-train-90pc.csv")
-# EVAL_SPLIT_FILE = Path("E:/Coding/finNLP/task_2/data/fnp2020-eval-90pc.csv")
+# TRAIN_SPLIT_FILE = Path("E:/Coding/finNLP/task_2/data/fnp2020-train.csv")
+# EVAL_SPLIT_FILE = Path("E:/Coding/finNLP/task_2/data/fnp2020-eval.csv")
+TRAIN_SPLIT_FILE = Path("E:/Coding/finNLP/task_2/data/fnp2020-train-90pc.csv")
+EVAL_SPLIT_FILE = Path("E:/Coding/finNLP/task_2/data/fnp2020-eval-90pc.csv")
 # TRAIN_SPLIT_FILE = Path("E:/Coding/finNLP/task_2/data/fnp2020-train-90pc.csv")
 # EVAL_SPLIT_FILE = Path("E:/Coding/finNLP/task_2/data/fnp2020-eval-90pc_subset.csv")
 TEST_FILE = Path("E:/Coding/finNLP/task_2/data/task2.csv")
