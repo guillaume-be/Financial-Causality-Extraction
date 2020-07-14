@@ -32,14 +32,14 @@ class ModelConfigurations(Enum):
 
 
 model_config = ModelConfigurations.RoBERTaSquadLarge
-RUN_NAME = 'FULL_90pc_TRAIN_EVAL_908_0a3758f13dbbb881101a087a55d31c231b482f60'
+RUN_NAME = 'FULL_90pc_TRAIN_EVAL_2f5caf4c3c7866711f6a90b1bf69fe4744eb256c24c4ee4a0ea9fcaa8f2a4f25'
 
 # model_config = ModelConfigurations.DistilBertSquad
 # RUN_NAME = 'FULL_TRAIN_EVAL'
 
 DO_TRAIN = False
-DO_EVAL = False
-DO_TEST = True
+DO_EVAL = True
+DO_TEST = False
 # Preprocessing
 MAX_SEQ_LENGTH = 384
 DOC_STRIDE = 128

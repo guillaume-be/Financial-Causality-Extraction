@@ -19,7 +19,7 @@ class ModelConfigurations(Enum):
 
 
 model_config = ModelConfigurations.RoBERTaSquadLarge
-RUN_NAME = 'FULL_90pc_TRAIN_EVAL_908_0a3758f13dbbb881101a087a55d31c231b482f60'
+RUN_NAME = 'FULL_90pc_TRAIN_EVAL_2f5caf4c3c7866711f6a90b1bf69fe4744eb256c24c4ee4a0ea9fcaa8f2a4f25'
 
 (_, MODEL_NAME_OR_PATH, _) = model_config.value
 output_dir = Path('E:/Coding/finNLP/task_2/output') / (MODEL_NAME_OR_PATH + '_' + RUN_NAME)
@@ -44,7 +44,6 @@ def get_threshold_f1(valid_scores: np.ndarray, invalid_scores: np.ndarray, thres
     tp = np.count_nonzero(valid_scores >= threshold)
     fn = np.count_nonzero(valid_scores < threshold)
     fp = np.count_nonzero(invalid_scores >= threshold)
-    tn = np.count_nonzero(invalid_scores < threshold)
     if tp > 0:
         precision = tp / (tp + fp)
         recall = tp / (tp + fn)
@@ -54,7 +53,7 @@ def get_threshold_f1(valid_scores: np.ndarray, invalid_scores: np.ndarray, thres
     return f1, precision, recall
 
 
-def get_max_f1(valid_scores: np.ndarray, invalid_scores: np.ndarray, step_size: float = 0.02):
+def get_max_f1(valid_scores: np.ndarray, invalid_scores: np.ndarray, step_size: float = 0.01):
     max_f1 = 0
     precision = 0
     recall = 0
@@ -110,3 +109,13 @@ if __name__ == '__main__':
     invalid_multiple_prediction_scores = np.array(invalid_multiple_prediction_scores)
 
     print(get_max_f1(valid_multiple_prediction_scores, invalid_multiple_prediction_scores))
+
+    sns.set_palette([[0.2, 0.2, 0.2, 1.], [0.884375, 0.5265625, 0, 1.]])
+    sns.set_context("paper", rc={"font.size": 12, "axes.titlesize": 12, "axes.labelsize": 50}, font_scale=1.3)
+    plt.figure(figsize=(8, 5))
+    bins = np.arange(0, 1.02, 0.02)
+    sns.distplot(valid_multiple_prediction_scores, label="Valid predictions scores", kde=False, bins=bins)
+    sns.distplot(invalid_multiple_prediction_scores, label="Invalid predictions scores", kde=False, bins=bins)
+    plt.xticks(np.arange(0, 1.1, 0.1))
+    plt.legend()
+    plt.savefig(output_dir / 'nbest_prediction', dpi=300)
