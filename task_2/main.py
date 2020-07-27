@@ -22,24 +22,28 @@ logger = logging.getLogger(__name__)
 
 
 class ModelConfigurations(Enum):
+    BertBase = ('bert', 'bert-base-cased', False)
+    BertLarge = ('bert', 'bert-large-cased', False)
     BertSquad = ('bert', 'deepset/bert-base-cased-squad2', False)
     BertSquad2 = ('bert', 'deepset/bert-large-uncased-whole-word-masking-squad2', True)
     DistilBertSquad = ('distilbert', 'distilbert-base-uncased-distilled-squad', True)
     RoBERTaSquad = ('roberta', 'deepset/roberta-base-squad2', False)
     RoBERTaSquadLarge = ('roberta', 'ahotrod/roberta_large_squad2', False)
+    RoBERTa = ('roberta', 'roberta-base', False)
+    RoBERTaLarge = ('roberta', 'roberta-large', False)
     XLNetBase = ('xlnet', 'xlnet-base-cased', False)
     AlbertSquad = ('albert', 'twmkn9/albert-base-v2-squad2', True)
 
 
-model_config = ModelConfigurations.RoBERTaSquadLarge
-RUN_NAME = 'FULL_90pc_TRAIN_EVAL_2f5caf4c3c7866711f6a90b1bf69fe4744eb256c24c4ee4a0ea9fcaa8f2a4f25'
+model_config = ModelConfigurations.BertLarge
+RUN_NAME = 'FULL_90pc_TRAIN_EVAL/checkpoint-2601'
 
 # model_config = ModelConfigurations.DistilBertSquad
 # RUN_NAME = 'FULL_TRAIN_EVAL'
 
 DO_TRAIN = False
-DO_EVAL = True
-DO_TEST = False
+DO_EVAL = False
+DO_TEST = True
 # Preprocessing
 MAX_SEQ_LENGTH = 384
 DOC_STRIDE = 128

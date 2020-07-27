@@ -53,7 +53,7 @@ def get_threshold_f1(valid_scores: np.ndarray, invalid_scores: np.ndarray, thres
     return f1, precision, recall
 
 
-def get_max_f1(valid_scores: np.ndarray, invalid_scores: np.ndarray, step_size: float = 0.01):
+def get_max_f1(valid_scores: np.ndarray, invalid_scores: np.ndarray, step_size: float = 0.001):
     max_f1 = 0
     precision = 0
     recall = 0
@@ -113,9 +113,19 @@ if __name__ == '__main__':
     sns.set_palette([[0.2, 0.2, 0.2, 1.], [0.884375, 0.5265625, 0, 1.]])
     sns.set_context("paper", rc={"font.size": 12, "axes.titlesize": 12, "axes.labelsize": 50}, font_scale=1.3)
     plt.figure(figsize=(8, 5))
-    bins = np.arange(0, 1.02, 0.02)
-    sns.distplot(valid_multiple_prediction_scores, label="Valid predictions scores", kde=False, bins=bins)
-    sns.distplot(invalid_multiple_prediction_scores, label="Invalid predictions scores", kde=False, bins=bins)
+    bins = np.arange(0, 1.01, 0.01)
+    sns.distplot(valid_multiple_prediction_scores, label="Valid N-th predictions scores", kde=False, bins=bins)
+    sns.distplot(invalid_multiple_prediction_scores, label="Invalid N-th predictions scores", kde=False, bins=bins)
     plt.xticks(np.arange(0, 1.1, 0.1))
     plt.legend()
     plt.savefig(output_dir / 'nbest_prediction', dpi=300)
+
+    sns.set_palette([[0.2, 0.2, 0.2, 1.], [0.884375, 0.5265625, 0, 1.]])
+    sns.set_context("paper", rc={"font.size": 12, "axes.titlesize": 12, "axes.labelsize": 50}, font_scale=1.3)
+    plt.figure(figsize=(8, 5))
+    bins = np.arange(0, 1.01, 0.01)
+    sns.distplot(valid_multiple_prediction_scores, label="Valid N-th predictions scores", kde=False, bins=bins)
+    sns.distplot(invalid_multiple_prediction_scores, label="Invalid N-th predictions scores", kde=False, bins=bins)
+    plt.xticks(np.arange(0, 1.1, 0.1))
+    plt.legend()
+    plt.savefig(output_dir / 'nbest_prediction.pdf', dpi=300, format='pdf')
