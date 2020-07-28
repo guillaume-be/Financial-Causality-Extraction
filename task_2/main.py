@@ -26,6 +26,7 @@ class ModelConfigurations(Enum):
     BertLarge = ('bert', 'bert-large-cased', False)
     BertSquad = ('bert', 'deepset/bert-base-cased-squad2', False)
     BertSquad2 = ('bert', 'deepset/bert-large-uncased-whole-word-masking-squad2', True)
+    DistilBert = ('distilbert', 'distilbert-base-uncased', True)
     DistilBertSquad = ('distilbert', 'distilbert-base-uncased-distilled-squad', True)
     RoBERTaSquad = ('roberta', 'deepset/roberta-base-squad2', False)
     RoBERTaSquadLarge = ('roberta', 'ahotrod/roberta_large_squad2', False)
@@ -35,7 +36,7 @@ class ModelConfigurations(Enum):
     AlbertSquad = ('albert', 'twmkn9/albert-base-v2-squad2', True)
 
 
-model_config = ModelConfigurations.BertLarge
+model_config = ModelConfigurations.DistilBert
 RUN_NAME = 'FULL_90pc_TRAIN_EVAL/checkpoint-2601'
 
 # model_config = ModelConfigurations.DistilBertSquad
