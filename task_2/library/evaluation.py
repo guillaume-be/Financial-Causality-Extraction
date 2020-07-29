@@ -46,7 +46,8 @@ def predict(model, tokenizer, device: torch.device, file_path: Path, model_type:
             max_seq_length: int, doc_stride: int, eval_batch_size: int, output_dir: str,
             n_best_size: int, max_answer_length: int,
             sentence_boundary_heuristic: bool, full_sentence_heuristic: bool, shared_sentence_heuristic: bool,
-            overwrite_cache: bool = False, prefix="", classifier_model=None, classifier_tokenizer=None):
+            overwrite_cache: bool = False, prefix="", classifier_model=None, classifier_tokenizer=None,
+            top_n_sentences: bool = True):
     dataset, examples, features = load_and_cache_examples(file_path, model_name_or_path, tokenizer,
                                                           max_seq_length, doc_stride,
                                                           output_examples=True, evaluate=True,
@@ -119,6 +120,7 @@ def predict(model, tokenizer, device: torch.device, file_path: Path, model_type:
         sentence_boundary_heuristic,
         full_sentence_heuristic,
         shared_sentence_heuristic,
+        top_n_sentences
     )
 
     # Run classifier to clean-up cause/effect confusions
@@ -135,11 +137,12 @@ def evaluate(model, tokenizer, device: torch.device, file_path: Path, model_type
              max_seq_length: int, doc_stride: int, eval_batch_size: int, output_dir: str,
              n_best_size: int, max_answer_length: int,
              sentence_boundary_heuristic: bool, full_sentence_heuristic: bool, shared_sentence_heuristic: bool,
-             overwrite_cache: bool = False, prefix="", classifier_model=None, classifier_tokenizer=None):
+             overwrite_cache: bool = False, prefix="", classifier_model=None, classifier_tokenizer=None,
+             top_n_sentences: bool = True):
     examples, predictions = predict(model, tokenizer, device, file_path, model_type, model_name_or_path, max_seq_length,
                                     doc_stride, eval_batch_size, output_dir, n_best_size, max_answer_length,
                                     sentence_boundary_heuristic, full_sentence_heuristic, shared_sentence_heuristic,
-                                    overwrite_cache, prefix, classifier_model, classifier_tokenizer)
+                                    overwrite_cache, prefix, classifier_model, classifier_tokenizer, top_n_sentences)
 
     # Compute the F1 and exact scores.
     results, correct, wrong = compute_metrics(examples, predictions)
@@ -508,7 +511,8 @@ def compute_predictions_logits(
         sequence_added_tokens,
         sentence_boundary_heuristic,
         full_sentence_heuristic,
-        shared_sentence_heuristic):
+        shared_sentence_heuristic,
+        top_n_sentences):
     """Write final predictions to the json file and log-odds of null if needed."""
     logger.info("Writing predictions to: %s" % output_prediction_file)
     logger.info("Writing nbest to: %s" % output_nbest_file)
@@ -527,7 +531,7 @@ def compute_predictions_logits(
     for (example_index, example) in enumerate(all_examples):
         features = example_index_to_features[example_index]
         suffix_index = 0
-        if example.example_id.count('.') == 2:
+        if example.example_id.count('.') == 2 and top_n_sentences:
             suffix_index = int(example.example_id.split('.')[-1])
         prelim_predictions = filter_impossible_spans(features,
                                                      unique_id_to_result,

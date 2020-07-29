@@ -7,22 +7,7 @@ import numpy as np
 import seaborn as sns
 import matplotlib.pyplot as plt
 
-
-class ModelConfigurations(Enum):
-    BertSquad = ('bert', 'deepset/bert-base-cased-squad2', False)
-    BertSquad2 = ('bert', 'deepset/bert-large-uncased-whole-word-masking-squad2', True)
-    DistilBertSquad = ('distilbert', 'distilbert-base-uncased-distilled-squad', True)
-    RoBERTaSquad = ('roberta', 'deepset/roberta-base-squad2', False)
-    RoBERTaSquadLarge = ('roberta', 'ahotrod/roberta_large_squad2', False)
-    XLNetBase = ('xlnet', 'xlnet-base-cased', False)
-    AlbertSquad = ('albert', 'twmkn9/albert-base-v2-squad2', True)
-
-
-model_config = ModelConfigurations.RoBERTaSquadLarge
-RUN_NAME = 'FULL_90pc_TRAIN_EVAL_2f5caf4c3c7866711f6a90b1bf69fe4744eb256c24c4ee4a0ea9fcaa8f2a4f25'
-
-(_, MODEL_NAME_OR_PATH, _) = model_config.value
-output_dir = Path('E:/Coding/finNLP/task_2/output') / (MODEL_NAME_OR_PATH + '_' + RUN_NAME)
+output_dir = Path('E:/Coding/fincausal-paper')
 nbest_file_valid = output_dir / 'nbest_predictions_valid.json'
 nbest_file_test = output_dir / 'nbest_predictions_test.json'
 
@@ -111,21 +96,27 @@ if __name__ == '__main__':
     print(get_max_f1(valid_multiple_prediction_scores, invalid_multiple_prediction_scores))
 
     sns.set_palette([[0.2, 0.2, 0.2, 1.], [0.884375, 0.5265625, 0, 1.]])
-    sns.set_context("paper", rc={"font.size": 12, "axes.titlesize": 12, "axes.labelsize": 50}, font_scale=1.3)
+    sns.set_context("paper", rc={"font.size": 12, "axes.titlesize": 12, "axes.labelsize": 15}, font_scale=1.3)
     plt.figure(figsize=(8, 5))
     bins = np.arange(0, 1.01, 0.01)
     sns.distplot(valid_multiple_prediction_scores, label="Valid N-th predictions scores", kde=False, bins=bins)
     sns.distplot(invalid_multiple_prediction_scores, label="Invalid N-th predictions scores", kde=False, bins=bins)
     plt.xticks(np.arange(0, 1.1, 0.1))
+    plt.xlabel('Product of span boundaries probabilities')
+    plt.ylabel('Count')
+    plt.tight_layout()
     plt.legend()
     plt.savefig(output_dir / 'nbest_prediction', dpi=300)
 
     sns.set_palette([[0.2, 0.2, 0.2, 1.], [0.884375, 0.5265625, 0, 1.]])
-    sns.set_context("paper", rc={"font.size": 12, "axes.titlesize": 12, "axes.labelsize": 50}, font_scale=1.3)
+    sns.set_context("paper", rc={"font.size": 12, "axes.titlesize": 12, "axes.labelsize": 15}, font_scale=1.3)
     plt.figure(figsize=(8, 5))
     bins = np.arange(0, 1.01, 0.01)
     sns.distplot(valid_multiple_prediction_scores, label="Valid N-th predictions scores", kde=False, bins=bins)
     sns.distplot(invalid_multiple_prediction_scores, label="Invalid N-th predictions scores", kde=False, bins=bins)
     plt.xticks(np.arange(0, 1.1, 0.1))
+    plt.xlabel('Product of span boundaries probabilities')
+    plt.ylabel('Count')
+    plt.tight_layout()
     plt.legend()
     plt.savefig(output_dir / 'nbest_prediction.pdf', dpi=300, format='pdf')

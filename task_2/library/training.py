@@ -33,13 +33,13 @@ logger = logging.getLogger(__name__)
 def train(train_dataset, model, tokenizer, train_batch_size: int,
           model_type: str, model_name_or_path: str, output_dir: str, predict_file: Path, log_file: Dict,
           device: torch.device, max_steps: Optional[int], gradient_accumulation_steps: int, num_train_epochs: int,
-          warmup_steps: int, logging_steps: int, save_steps: int, evaluate_during_training: bool,
+          warmup_steps: int, logging_steps: int, evaluate_during_training: bool,
           max_seq_length: int, doc_stride: int, eval_batch_size: int,
           n_best_size: int, max_answer_length: int,
           sentence_boundary_heuristic: bool, full_sentence_heuristic: bool, shared_sentence_heuristic: bool,
           learning_rate: float, weight_decay: float = 0.0, differential_lr_ratio: float = 0.0,
           adam_epsilon: float = 1e-8, max_grad_norm: float = 1.0, overwrite_cache: bool = False,
-          optimizer_class = AdamW, scheduler_function=get_linear_schedule_with_warmup):
+          optimizer_class=AdamW, scheduler_function=get_linear_schedule_with_warmup, top_n_sentences: bool = True):
     """ Train the model """
     tb_writer = SummaryWriter()
 
@@ -134,9 +134,9 @@ def train(train_dataset, model, tokenizer, train_batch_size: int,
     current_f1 = 0
 
     for _ in train_iterator:
-        epoch_iterator = tqdm(train_dataloader, desc=f"Iteration Loss: {tr_loss/global_step}", position=0, leave=True)
+        epoch_iterator = tqdm(train_dataloader, desc=f"Iteration Loss: {tr_loss / global_step}", position=0, leave=True)
         for step, batch in enumerate(epoch_iterator):
-            epoch_iterator.set_description(f"Iteration Loss: {tr_loss/global_step}")
+            epoch_iterator.set_description(f"Iteration Loss: {tr_loss / global_step}")
             # Skip past any already trained steps if resuming training
             if steps_trained_in_current_epoch > 0:
                 steps_trained_in_current_epoch -= 1
@@ -183,21 +183,22 @@ def train(train_dataset, model, tokenizer, train_batch_size: int,
         # Log metrics
         if evaluate_during_training:
             metrics = evaluate(model=model,
-                                tokenizer=tokenizer,
-                                device=device,
-                                file_path=predict_file,
-                                model_type=model_type,
-                                model_name_or_path=model_name_or_path,
-                                max_seq_length=max_seq_length,
-                                doc_stride=doc_stride,
-                                eval_batch_size=eval_batch_size,
-                                output_dir=output_dir,
-                                n_best_size=n_best_size,
-                                max_answer_length=max_answer_length,
-                                sentence_boundary_heuristic=sentence_boundary_heuristic,
-                                full_sentence_heuristic=full_sentence_heuristic,
-                                shared_sentence_heuristic=shared_sentence_heuristic,
-                                overwrite_cache=overwrite_cache)
+                               tokenizer=tokenizer,
+                               device=device,
+                               file_path=predict_file,
+                               model_type=model_type,
+                               model_name_or_path=model_name_or_path,
+                               max_seq_length=max_seq_length,
+                               doc_stride=doc_stride,
+                               eval_batch_size=eval_batch_size,
+                               output_dir=output_dir,
+                               n_best_size=n_best_size,
+                               max_answer_length=max_answer_length,
+                               sentence_boundary_heuristic=sentence_boundary_heuristic,
+                               full_sentence_heuristic=full_sentence_heuristic,
+                               shared_sentence_heuristic=shared_sentence_heuristic,
+                               overwrite_cache=overwrite_cache,
+                               top_n_sentences=top_n_sentences)
             log_file[f'step_{global_step}'] = metrics
 
             # # Save model checkpoint
@@ -218,7 +219,6 @@ def train(train_dataset, model, tokenizer, train_batch_size: int,
         if max_steps is not None and global_step > max_steps:
             train_iterator.close()
             break
-
 
     tb_writer.close()
 

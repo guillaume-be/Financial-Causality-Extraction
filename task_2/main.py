@@ -36,15 +36,19 @@ class ModelConfigurations(Enum):
     AlbertSquad = ('albert', 'twmkn9/albert-base-v2-squad2', True)
 
 
-model_config = ModelConfigurations.DistilBert
-RUN_NAME = 'FULL_90pc_TRAIN_EVAL/checkpoint-2601'
+model_config = ModelConfigurations.RoBERTaSquadLarge
+RUN_NAME = 'FULL_90pc_TRAIN_EVAL_2f5caf4c3c7866711f6a90b1bf69fe4744eb256c24c4ee4a0ea9fcaa8f2a4f25'
+# RUN_NAME = 'FULL_90pc_TRAIN_EVAL_906_d4460e674a97066d1a382721f0cdc7dbdad3c92c'
+# RUN_NAME = 'FULL_90pc_TRAIN_EVAL_908_0a3758f13dbbb881101a087a55d31c231b482f60'
+
+# RUN_NAME = 'FULL_90pc_TRAIN_EVAL-57cd3ad6be3245b44868ed813fd45a206528b9f9'
 
 # model_config = ModelConfigurations.DistilBertSquad
 # RUN_NAME = 'FULL_TRAIN_EVAL'
 
 DO_TRAIN = False
-DO_EVAL = False
-DO_TEST = True
+DO_EVAL = True
+DO_TEST = False
 # Preprocessing
 MAX_SEQ_LENGTH = 384
 DOC_STRIDE = 128
@@ -71,6 +75,7 @@ SENTENCE_BOUNDARY_HEURISTIC = True
 FULL_SENTENCE_HEURISTIC = True
 SHARED_SENTENCE_HEURISTIC = False
 POST_CLASSIFICATION = False
+TOP_N_SENTENCES = True
 
 (MODEL_TYPE, MODEL_NAME_OR_PATH, DO_LOWER_CASE) = model_config.value
 PRACTICE_FILE = Path("E:/Coding/finNLP/task_2/data/fnp2020-fincausal2-task2.csv")
@@ -157,7 +162,6 @@ if __name__ == '__main__':
                                      num_train_epochs=NUM_TRAIN_EPOCHS,
                                      warmup_steps=WARMUP_STEPS,
                                      logging_steps=500,
-                                     save_steps=0,
                                      evaluate_during_training=True,
                                      max_seq_length=MAX_SEQ_LENGTH,
                                      doc_stride=DOC_STRIDE,
@@ -174,6 +178,7 @@ if __name__ == '__main__':
                                      optimizer_class=OPTIMIZER_CLASS,
                                      weight_decay=WEIGHT_DECAY,
                                      scheduler_function=SCHEDULER_FUNCTION,
+                                     top_n_sentences=TOP_N_SENTENCES
                                      )
 
         if not os.path.exists(OUTPUT_DIR):
@@ -217,7 +222,8 @@ if __name__ == '__main__':
                           shared_sentence_heuristic=SHARED_SENTENCE_HEURISTIC,
                           overwrite_cache=OVERWRITE_CACHE,
                           classifier_model=classifier_model,
-                          classifier_tokenizer=classifier_tokenizer
+                          classifier_tokenizer=classifier_tokenizer,
+                          top_n_sentences=TOP_N_SENTENCES
                           )
 
         print("done")
@@ -251,6 +257,7 @@ if __name__ == '__main__':
                          full_sentence_heuristic=FULL_SENTENCE_HEURISTIC,
                          shared_sentence_heuristic=SHARED_SENTENCE_HEURISTIC,
                          overwrite_cache=OVERWRITE_CACHE,
+                         top_n_sentences=TOP_N_SENTENCES
                          )
 
         print("done")

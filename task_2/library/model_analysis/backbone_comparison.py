@@ -2,6 +2,9 @@ from pathlib import Path
 import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
+from matplotlib import gridspec
+from matplotlib.ticker import FormatStrFormatter
+import numpy as np
 
 sns.set_palette([[0.2, 0.2, 0.2, 1.], [0.884375, 0.5265625, 0, 1.]])
 output_dir = Path('E:/Coding/fincausal-paper')
@@ -26,16 +29,21 @@ if __name__ == '__main__':
 
     yerr = [aggregated_f1['mean'] - aggregated_f1['min'], aggregated_f1['max'] - aggregated_f1['mean']]
     sns.set_palette([[0.2, 0.2, 0.2, 1.], [0.884375, 0.5265625, 0, 1.]])
-    sns.set_context("paper", rc={"font.size": 12, "axes.titlesize": 12, "axes.labelsize": 20}, font_scale=1.3)
 
     if COMBINED:
-        plt.figure(figsize=(16, 5))
-        plt.subplot(1, 2, 1)
+        sns.set_context("paper", rc={"font.size": 12, "axes.titlesize": 12, "axes.labelsize": 20}, font_scale=2.0)
+        fig = plt.figure(figsize=(16, 5))
+        gs = gridspec.GridSpec(1, 2, width_ratios=[0.9, 1])
+        ax = fig.add_subplot(gs[0])
+        sns.pointplot(x="mean", y="Model", data=aggregated_f1, orient='h', ci=None, join=False, ax=ax)
     else:
+        sns.set_context("paper", rc={"font.size": 12, "axes.titlesize": 12, "axes.labelsize": 20}, font_scale=1.3)
         plt.figure(figsize=(8, 5))
+        ax = sns.pointplot(x="mean", y="Model", data=aggregated_f1, orient='h', ci=None, join=False)
 
-    ax = sns.pointplot(x="mean", y="Model", data=aggregated_f1, orient='h', ci=None, join=False)
     ax.set(xlabel='F1 score', ylabel='')
+    ax.xaxis.set_major_formatter(FormatStrFormatter('%.2f'))
+    plt.xticks(np.arange(min(aggregated_f1['min']), max(aggregated_f1['max']) + 0.01, 0.01))
     plt.errorbar(y=list(range(len(aggregated_f1))), x=aggregated_f1['mean'],
                  xerr=yerr, fmt='none', capsize=3)
     plt.axhline(y=len(aggregated_f1) / 2 - 0.5, color='lightgrey', linewidth=1, linestyle='--')
@@ -52,11 +60,14 @@ if __name__ == '__main__':
             aggregated_exact_match['max'] - aggregated_exact_match['mean']]
 
     if COMBINED:
-        plt.subplot(1, 2, 2)
+        ax = fig.add_subplot(gs[1])
+        sns.pointplot(x="mean", y="Model", data=aggregated_exact_match, orient='h', ci=None, join=False, ax=ax)
     else:
         plt.figure(figsize=(8, 5))
-    ax = sns.pointplot(x="mean", y="Model", data=aggregated_exact_match, orient='h', ci=None, join=False)
+        ax = sns.pointplot(x="mean", y="Model", data=aggregated_exact_match, orient='h', ci=None, join=False)
     ax.set(xlabel='Exact match', ylabel='')
+    if COMBINED:
+        ax.yaxis.set_ticklabels([])
     plt.errorbar(y=list(range(len(aggregated_exact_match['mean']))), x=aggregated_exact_match['mean'],
                  xerr=yerr, fmt='none', capsize=3)
     plt.axhline(y=len(aggregated_f1) / 2 - 0.5, color='lightgrey', linewidth=1, linestyle='--')
