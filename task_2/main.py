@@ -1,3 +1,21 @@
+# Copyright 2018 The Google AI Language Team Authors and The HuggingFace Inc. team.
+# Copyright (c) 2018, NVIDIA CORPORATION.  All rights reserved.
+# Copyright 2020 Guillaume Becquin.
+# MODIFIED FOR CAUSE EFFECT EXTRACTION
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+
 import json
 import logging
 import os
@@ -8,14 +26,14 @@ from transformers import BertTokenizer, DistilBertTokenizer, XLNetTokenizer, Aut
     AlbertTokenizer
 from transformers import AdamW, get_cosine_schedule_with_warmup
 
-from library.evaluation import evaluate, predict
-from library.models.albert import AlbertForCauseEffect
-from library.models.bert import BertForCauseEffect
-from library.models.distilbert import DistilBertForCauseEffect
-from library.models.roberta import RoBERTaForCauseEffect, RoBERTaForCauseEffectClassification
-from library.models.xlnet import XLNetForCauseEffect
-from library.preprocessing import load_and_cache_examples
-from library.training import train
+from .library.evaluation import evaluate, predict
+from .library.models.albert import AlbertForCauseEffect
+from .library.models.bert import BertForCauseEffect
+from .library.models.distilbert import DistilBertForCauseEffect
+from .library.models.roberta import RoBERTaForCauseEffect, RoBERTaForCauseEffectClassification
+from .library.models.xlnet import XLNetForCauseEffect
+from .library.preprocessing import load_and_cache_examples
+from .library.training import train
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -37,14 +55,7 @@ class ModelConfigurations(Enum):
 
 
 model_config = ModelConfigurations.RoBERTaSquadLarge
-RUN_NAME = 'FULL_90pc_TRAIN_EVAL_2f5caf4c3c7866711f6a90b1bf69fe4744eb256c24c4ee4a0ea9fcaa8f2a4f25'
-# RUN_NAME = 'FULL_90pc_TRAIN_EVAL_906_d4460e674a97066d1a382721f0cdc7dbdad3c92c'
-# RUN_NAME = 'FULL_90pc_TRAIN_EVAL_908_0a3758f13dbbb881101a087a55d31c231b482f60'
-
-# RUN_NAME = 'FULL_90pc_TRAIN_EVAL-57cd3ad6be3245b44868ed813fd45a206528b9f9'
-
-# model_config = ModelConfigurations.DistilBertSquad
-# RUN_NAME = 'FULL_TRAIN_EVAL'
+RUN_NAME = 'model_run'
 
 DO_TRAIN = False
 DO_EVAL = True
@@ -54,18 +65,15 @@ MAX_SEQ_LENGTH = 384
 DOC_STRIDE = 128
 OVERWRITE_CACHE = True
 # Training
-PER_GPU_BATCH_SIZE = 4  # 4 for BERT-based models, 12 for DistilBERT
-GRADIENT_ACCUMULATION_STEPS = 3  # 3 for BERT-base models, 1 for DistilBERT
+PER_GPU_BATCH_SIZE = 4
+GRADIENT_ACCUMULATION_STEPS = 3
 WARMUP_STEPS = 50
 LEARNING_RATE = 3e-5
 DIFFERENTIAL_LR_RATIO = 1.0
 NUM_TRAIN_EPOCHS = 5
 SAVE_MODEL = True
 WEIGHT_DECAY = 0.0
-# OPTIMIZER_CLASS = optim.RAdam
 OPTIMIZER_CLASS = AdamW
-# SCHEDULER_FUNCTION = partial(get_cosine_with_hard_restarts_schedule_with_warmup, num_cycles=2)
-# SCHEDULER_FUNCTION = get_linear_schedule_with_warmup
 SCHEDULER_FUNCTION = get_cosine_schedule_with_warmup
 # Evaluation
 PER_GPU_EVAL_BATCH_SIZE = 8
@@ -78,20 +86,18 @@ POST_CLASSIFICATION = False
 TOP_N_SENTENCES = True
 
 (MODEL_TYPE, MODEL_NAME_OR_PATH, DO_LOWER_CASE) = model_config.value
-PRACTICE_FILE = Path("E:/Coding/finNLP/task_2/data/fnp2020-fincausal2-task2.csv")
-TRIAL_FILE = Path("E:/Coding/finNLP/task_2/data/fnp2020-fincausal-task2.csv")
-# TRAIN_SPLIT_FILE = Path("E:/Coding/finNLP/task_2/data/fnp2020-train.csv")
-# EVAL_SPLIT_FILE = Path("E:/Coding/finNLP/task_2/data/fnp2020-eval.csv")
-TRAIN_SPLIT_FILE = Path("E:/Coding/finNLP/task_2/data/fnp2020-train-90pc.csv")
-EVAL_SPLIT_FILE = Path("E:/Coding/finNLP/task_2/data/fnp2020-eval-90pc.csv")
-# TRAIN_SPLIT_FILE = Path("E:/Coding/finNLP/task_2/data/fnp2020-train-90pc.csv")
-# EVAL_SPLIT_FILE = Path("E:/Coding/finNLP/task_2/data/fnp2020-eval-90pc_subset.csv")
-TEST_FILE = Path("E:/Coding/finNLP/task_2/data/task2.csv")
+fincausal_data_path = Path(os.environ['FINCAUSAL_DATA_PATH'])
+fincausal_output_path = Path(os.environ['FINCAUSAL_OUTPUT_PATH'])
+PRACTICE_FILE = fincausal_data_path / "fnp2020-fincausal2-task2.csv"
+TRIAL_FILE = fincausal_data_path / "fnp2020-fincausal-task2.csv"
+TRAIN_SPLIT_FILE = fincausal_data_path / "fnp2020-train-90pc.csv"
+EVAL_SPLIT_FILE = fincausal_data_path / "fnp2020-eval-90pc.csv"
+TEST_FILE = fincausal_data_path / "task2.csv"
 
-if RUN_NAME is not None:
-    OUTPUT_DIR = str(Path('E:/Coding/finNLP/task_2/output') / (MODEL_NAME_OR_PATH + '_' + RUN_NAME))
+if RUN_NAME:
+    OUTPUT_DIR = str(fincausal_output_path / (MODEL_NAME_OR_PATH + '_' + RUN_NAME))
 else:
-    OUTPUT_DIR = str(Path('E:/Coding/finNLP/task_2/output') / MODEL_NAME_OR_PATH)
+    OUTPUT_DIR = str(fincausal_output_path / MODEL_NAME_OR_PATH)
 
 TRAIN_FILE = TRAIN_SPLIT_FILE
 EVAL_FILE = EVAL_SPLIT_FILE

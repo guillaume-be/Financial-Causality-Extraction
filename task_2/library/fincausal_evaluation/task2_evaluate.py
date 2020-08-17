@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 # coding=utf-8
 # Copyrights YseopLab 2020. All rights reserved.
+# Original evaluation file from https://github.com/yseop/YseopLab/blob/develop/FNP_2020_FinCausal/scoring/task2/task2_evaluate.py
 """ task2_evaluate.py - Scoring program for Fincausal 2020 Task 2
 
     usage: task2_evaluate.py [-h] {from-folder,from-file} ...
