@@ -30,7 +30,7 @@ from .library.evaluation import evaluate, predict
 from .library.models.albert import AlbertForCauseEffect
 from .library.models.bert import BertForCauseEffect
 from .library.models.distilbert import DistilBertForCauseEffect
-from .library.models.roberta import RoBERTaForCauseEffect, RoBERTaForCauseEffectClassification
+from .library.models.roberta import RoBERTaForCauseEffect
 from .library.models.xlnet import XLNetForCauseEffect
 from .library.preprocessing import load_and_cache_examples
 from .library.training import train
@@ -82,7 +82,6 @@ MAX_ANSWER_LENGTH = 300
 SENTENCE_BOUNDARY_HEURISTIC = True
 FULL_SENTENCE_HEURISTIC = True
 SHARED_SENTENCE_HEURISTIC = False
-POST_CLASSIFICATION = False
 TOP_N_SENTENCES = True
 
 (MODEL_TYPE, MODEL_NAME_OR_PATH, DO_LOWER_CASE) = model_config.value
@@ -202,15 +201,6 @@ if __name__ == '__main__':
         tokenizer = tokenizer_class.from_pretrained(OUTPUT_DIR, do_lower_case=DO_LOWER_CASE)
         model = model_class.from_pretrained(OUTPUT_DIR).to(device)
 
-        if POST_CLASSIFICATION:
-            classifier_model = RoBERTaForCauseEffectClassification.from_pretrained(
-                'E:/Coding/finNLP/task_2/output/deepset/roberta-base-squad2_TRAIN_PRACTICE_EVAL_TRIAL_TRAIN_PRACTICE_EVAL_TRIAL_CLASSIFICATION')
-            classifier_tokenizer = RobertaTokenizer.from_pretrained(
-                'E:/Coding/finNLP/task_2/output/deepset/roberta-base-squad2_TRAIN_PRACTICE_EVAL_TRIAL_TRAIN_PRACTICE_EVAL_TRIAL_CLASSIFICATION')
-        else:
-            classifier_model = None
-            classifier_tokenizer = None
-
         result = evaluate(model=model,
                           tokenizer=tokenizer,
                           device=device,
@@ -227,8 +217,6 @@ if __name__ == '__main__':
                           full_sentence_heuristic=FULL_SENTENCE_HEURISTIC,
                           shared_sentence_heuristic=SHARED_SENTENCE_HEURISTIC,
                           overwrite_cache=OVERWRITE_CACHE,
-                          classifier_model=classifier_model,
-                          classifier_tokenizer=classifier_tokenizer,
                           top_n_sentences=TOP_N_SENTENCES
                           )
 
@@ -237,15 +225,6 @@ if __name__ == '__main__':
     if DO_TEST:
         tokenizer = tokenizer_class.from_pretrained(OUTPUT_DIR, do_lower_case=DO_LOWER_CASE)
         model = model_class.from_pretrained(OUTPUT_DIR).to(device)
-
-        if POST_CLASSIFICATION:
-            classifier_model = RoBERTaForCauseEffectClassification.from_pretrained(
-                'E:/Coding/finNLP/task_2/output/deepset/roberta-base-squad2_TRAIN_PRACTICE_EVAL_TRIAL_TRAIN_PRACTICE_EVAL_TRIAL_CLASSIFICATION')
-            classifier_tokenizer = RobertaTokenizer.from_pretrained(
-                'E:/Coding/finNLP/task_2/output/deepset/roberta-base-squad2_TRAIN_PRACTICE_EVAL_TRIAL_TRAIN_PRACTICE_EVAL_TRIAL_CLASSIFICATION')
-        else:
-            classifier_model = None
-            classifier_tokenizer = None
 
         result = predict(model=model,
                          tokenizer=tokenizer,

@@ -48,8 +48,7 @@ def predict(model, tokenizer, device: torch.device, file_path: Path, model_type:
             max_seq_length: int, doc_stride: int, eval_batch_size: int, output_dir: str,
             n_best_size: int, max_answer_length: int,
             sentence_boundary_heuristic: bool, full_sentence_heuristic: bool, shared_sentence_heuristic: bool,
-            overwrite_cache: bool = False, prefix="", classifier_model=None, classifier_tokenizer=None,
-            top_n_sentences: bool = True):
+            overwrite_cache: bool = False, prefix="", top_n_sentences: bool = True):
     dataset, examples, features = load_and_cache_examples(file_path, model_name_or_path, tokenizer,
                                                           max_seq_length, doc_stride,
                                                           output_examples=True, evaluate=True,
@@ -125,13 +124,6 @@ def predict(model, tokenizer, device: torch.device, file_path: Path, model_type:
         top_n_sentences
     )
 
-    # Run classifier to clean-up cause/effect confusions
-    if classifier_model is not None and classifier_tokenizer is not None:
-        predictions = clean_up_cause_effect_confusion(predictions,
-                                                      classifier_model,
-                                                      classifier_tokenizer,
-                                                      max_seq_length)
-
     return examples, predictions
 
 
@@ -139,12 +131,11 @@ def evaluate(model, tokenizer, device: torch.device, file_path: Path, model_type
              max_seq_length: int, doc_stride: int, eval_batch_size: int, output_dir: str,
              n_best_size: int, max_answer_length: int,
              sentence_boundary_heuristic: bool, full_sentence_heuristic: bool, shared_sentence_heuristic: bool,
-             overwrite_cache: bool = False, prefix="", classifier_model=None, classifier_tokenizer=None,
-             top_n_sentences: bool = True):
+             overwrite_cache: bool = False, prefix="", top_n_sentences: bool = True):
     examples, predictions = predict(model, tokenizer, device, file_path, model_type, model_name_or_path, max_seq_length,
                                     doc_stride, eval_batch_size, output_dir, n_best_size, max_answer_length,
                                     sentence_boundary_heuristic, full_sentence_heuristic, shared_sentence_heuristic,
-                                    overwrite_cache, prefix, classifier_model, classifier_tokenizer, top_n_sentences)
+                                    overwrite_cache, prefix, top_n_sentences)
 
     # Compute the F1 and exact scores.
     results, correct, wrong = compute_metrics(examples, predictions)
@@ -158,47 +149,6 @@ def evaluate(model, tokenizer, device: torch.device, file_path: Path, model_type
         writer.write(json.dumps(wrong, indent=4) + "\n")
 
     return results
-
-
-def clean_up_cause_effect_confusion(predictions: collections.OrderedDict,
-                                    classifier: nn.Module,
-                                    tokenizer: PreTrainedTokenizer,
-                                    max_seq_length=512):
-    classifier = classifier.eval().cuda()
-    for (prediction_idx, prediction) in predictions.items():
-        cause_input = tokenizer.encode_plus(text=prediction['text'],
-                                            text_pair=prediction['cause_text'],
-                                            max_length=max_seq_length,
-                                            return_overflowing_tokens=False,
-                                            pad_to_max_length=True,
-                                            stride=0,
-                                            truncation_strategy="only_first",
-                                            return_token_type_ids=False,
-                                            truncation=True,
-                                            return_tensors='pt'
-                                            )
-        effect_input = tokenizer.encode_plus(text=prediction['text'],
-                                             text_pair=prediction['effect_text'],
-                                             max_length=max_seq_length,
-                                             return_overflowing_tokens=False,
-                                             pad_to_max_length=True,
-                                             stride=0,
-                                             truncation_strategy="only_first",
-                                             return_token_type_ids=False,
-                                             truncation=True,
-                                             return_tensors='pt'
-                                             )
-        input_tensor = torch.stack([cause_input.input_ids.squeeze(), effect_input.input_ids.squeeze()]).cuda()
-        output = classifier(input_tensor)[0].detach().cpu()
-        softmaxed_output = output.softmax(dim=1)[:, 0]
-
-        if softmaxed_output[0] / softmaxed_output[1] < 0.5:
-            effect = predictions[prediction_idx]['effect_text']
-            cause = predictions[prediction_idx]['cause_text']
-            predictions[prediction_idx]['cause_text'] = effect
-            predictions[prediction_idx]['effect_text'] = cause
-
-    return predictions
 
 
 def get_data_from_list(input_data: List[List[str]]):
@@ -273,11 +223,6 @@ def compute_metrics(examples: List[FinCausalExample], predictions: collections.O
                'Recall: ': recall,
                'exact match: ': exact_match
            }, all_correct, all_wrong
-
-
-class SpanType(Enum):
-    cause = 0,
-    effect = 1
 
 
 _PrelimPrediction = collections.namedtuple(
@@ -643,70 +588,6 @@ def _get_best_indexes(logits, n_best_size):
             break
         best_indexes.append(index_and_score[i][0])
     return best_indexes
-
-
-def get_final_text(pred_text, orig_text, do_lower_case, verbose_logging=False):
-    """Project the tokenized prediction back to the original text."""
-
-    def _strip_spaces(text):
-        ns_chars = []
-        ns_to_s_map = collections.OrderedDict()
-        for (i, c) in enumerate(text):
-            if c == " ":
-                continue
-            ns_to_s_map[len(ns_chars)] = i
-            ns_chars.append(c)
-        ns_text = "".join(ns_chars)
-        return ns_text, ns_to_s_map
-
-    tokenizer = BasicTokenizer(do_lower_case=do_lower_case)
-    tok_text = " ".join(tokenizer.tokenize(orig_text))
-
-    start_position = tok_text.find(pred_text)
-    if start_position == -1:
-        if verbose_logging:
-            logger.info("Unable to find text: '%s' in '%s'" % (pred_text, orig_text))
-        return orig_text
-    end_position = start_position + len(pred_text) - 1
-
-    (orig_ns_text, orig_ns_to_s_map) = _strip_spaces(orig_text)
-    (tok_ns_text, tok_ns_to_s_map) = _strip_spaces(tok_text)
-
-    if len(orig_ns_text) != len(tok_ns_text):
-        if verbose_logging:
-            logger.info("Length not equal after stripping spaces: '%s' vs '%s'", orig_ns_text, tok_ns_text)
-        return orig_text
-
-    # We then project the characters in `pred_text` back to `orig_text` using
-    # the character-to-character alignment.
-    tok_s_to_ns_map = {}
-    for (i, tok_index) in tok_ns_to_s_map.items():
-        tok_s_to_ns_map[tok_index] = i
-
-    orig_start_position = None
-    if start_position in tok_s_to_ns_map:
-        ns_start_position = tok_s_to_ns_map[start_position]
-        if ns_start_position in orig_ns_to_s_map:
-            orig_start_position = orig_ns_to_s_map[ns_start_position]
-
-    if orig_start_position is None:
-        if verbose_logging:
-            logger.info("Couldn't map start position")
-        return orig_text
-
-    orig_end_position = None
-    if end_position in tok_s_to_ns_map:
-        ns_end_position = tok_s_to_ns_map[end_position]
-        if ns_end_position in orig_ns_to_s_map:
-            orig_end_position = orig_ns_to_s_map[ns_end_position]
-
-    if orig_end_position is None:
-        if verbose_logging:
-            logger.info("Couldn't map end position")
-        return orig_text
-
-    output_text = orig_text[orig_start_position: (orig_end_position + 1)]
-    return output_text
 
 
 def _compute_softmax(scores):
