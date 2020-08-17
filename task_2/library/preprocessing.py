@@ -72,7 +72,6 @@ def load_and_cache_examples(file_path: Path, model_name_or_path: str,
             doc_stride=doc_stride,
             is_training=not evaluate,
             return_dataset="pt",
-            # threads=multiprocessing.cpu_count(),
             threads=1,
         )
 
@@ -163,12 +162,10 @@ def _improve_answer_span(doc_tokens: List[str],
     return input_start, input_end
 
 
-def _new_check_is_max_context(doc_spans: List[dict],
-                              cur_span_index: int,
-                              position: int):
+def _check_is_max_context(doc_spans: List[dict],
+                          cur_span_index: int,
+                          position: int):
     """Check if this is the 'max context' doc span for the token."""
-    # if len(doc_spans) == 1:
-    # return True
     best_score = None
     best_span_index = None
     for (span_index, doc_span) in enumerate(doc_spans):
@@ -309,7 +306,7 @@ def fincausal_convert_example_to_features(example: FinCausalExample,
 
     for doc_span_index in range(len(spans)):
         for j in range(spans[doc_span_index]["paragraph_len"]):
-            is_max_context = _new_check_is_max_context(spans, doc_span_index, doc_span_index * doc_stride + j)
+            is_max_context = _check_is_max_context(spans, doc_span_index, doc_span_index * doc_stride + j)
             spans[doc_span_index]["token_is_max_context"][j] = is_max_context
 
     for span in spans:

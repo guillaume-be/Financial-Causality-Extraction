@@ -15,8 +15,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-
-import json
 import logging
 import os
 from pathlib import Path
@@ -26,7 +24,7 @@ import torch
 from torch.utils.data import RandomSampler, DataLoader
 from torch.utils.tensorboard import SummaryWriter
 from tqdm import trange, tqdm
-from transformers import AdamW, get_linear_schedule_with_warmup, get_cosine_with_hard_restarts_schedule_with_warmup
+from transformers import AdamW, get_linear_schedule_with_warmup
 
 from .evaluation import evaluate
 
@@ -134,7 +132,6 @@ def train(train_dataset, model, tokenizer, train_batch_size: int,
     tr_loss, logging_loss = 0.0, 0.0
     model.zero_grad()
     train_iterator = trange(epochs_trained, int(num_train_epochs), desc="Epoch")
-    current_f1 = 0
 
     for _ in train_iterator:
         epoch_iterator = tqdm(train_dataloader, desc=f"Iteration Loss: {tr_loss / global_step}", position=0, leave=True)
@@ -204,9 +201,6 @@ def train(train_dataset, model, tokenizer, train_batch_size: int,
                                top_n_sentences=top_n_sentences)
             log_file[f'step_{global_step}'] = metrics
 
-            # # Save model checkpoint
-            # if metrics['F1score:'] > current_f1:
-            #     current_f1 = metrics['F1score:']
             _output_dir = os.path.join(output_dir, "checkpoint-{}".format(global_step))
             if not os.path.exists(_output_dir):
                 os.makedirs(_output_dir)
