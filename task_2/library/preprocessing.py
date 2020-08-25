@@ -20,7 +20,7 @@ import multiprocessing
 import os
 from functools import partial
 from pathlib import Path
-from typing import Union, List
+from typing import Union, List, Tuple
 
 import spacy
 from pysbd.utils import PySBDFactory
@@ -30,53 +30,34 @@ import pandas as pd
 import torch
 from torch.utils.data import TensorDataset
 from tqdm import tqdm
+from transformers import PreTrainedTokenizerBase
 from transformers.tokenization_bert import whitespace_tokenize
+
+from .config import CauseEffectConfig
 from .data import FinCausalExample, FinCausalFeatures, _is_punctuation
 
 logger = logging.getLogger(__name__)
 
 
-def load_and_cache_examples(file_path: Path, model_name_or_path: str,
-                            tokenizer,
-                            max_seq_length: int, doc_stride: int,
+def load_and_cache_examples(file_path: Path,
+                            tokenizer: PreTrainedTokenizerBase,
+                            run_config: CauseEffectConfig,
                             output_examples: bool = True,
-                            evaluate=False, overwrite_cache: bool = False):
-    # Load data features from cache or dataset file
-    input_dir = file_path.parents[0]
-    cached_features_file = os.path.join(
-        input_dir,
-        "cached_{}_{}".format(
-            "dev" if evaluate else "train",
-            list(filter(None, model_name_or_path.split("/"))).pop()
-        ),
+                            evaluate: bool = False) -> \
+        Union[Tuple[TensorDataset, List[FinCausalExample], List[FinCausalFeatures]],
+              TensorDataset]:
+    processor = FinCausalProcessor()
+    examples = processor.get_examples(file_path)
+
+    features, dataset = fincausal_convert_examples_to_features(
+        examples=examples,
+        tokenizer=tokenizer,
+        max_seq_length=run_config.max_seq_length,
+        doc_stride=run_config.doc_stride,
+        is_training=not evaluate,
+        return_dataset="pt",
+        threads=1,
     )
-
-    # Init features and dataset from cache if it exists
-    if os.path.exists(cached_features_file) and not overwrite_cache:
-        logger.info("Loading features from cached file %s", cached_features_file)
-        features_and_dataset = torch.load(cached_features_file)
-        features, dataset, examples = (
-            features_and_dataset["features"],
-            features_and_dataset["dataset"],
-            features_and_dataset["examples"],
-        )
-    else:
-        logger.info("Creating features from dataset file at %s", input_dir)
-        processor = FinCausalProcessor()
-        examples = processor.get_examples(file_path)
-
-        features, dataset = fincausal_convert_examples_to_features(
-            examples=examples,
-            tokenizer=tokenizer,
-            max_seq_length=max_seq_length,
-            doc_stride=doc_stride,
-            is_training=not evaluate,
-            return_dataset="pt",
-            threads=1,
-        )
-
-        logger.info("Saving features into cached file %s", cached_features_file)
-        torch.save({"features": features, "dataset": dataset, "examples": examples}, cached_features_file)
 
     if output_examples:
         return dataset, examples, features

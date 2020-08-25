@@ -11,7 +11,7 @@ if __name__ == '__main__':
 
     input_file = fincausal_data_path / "fnp2020-fincausal-task2.csv"
     train_output = fincausal_data_path / "fnp2020-train.csv"
-    dev_output = fincausal_data_path / "fnp2020-dev.csv"
+    dev_output = fincausal_data_path / "fnp2020-eval.csv"
     size = 0.2
     seed = 42
 
