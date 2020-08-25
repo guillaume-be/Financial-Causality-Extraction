@@ -21,7 +21,7 @@ import logging
 import os
 from pathlib import Path
 import torch
-from library.config import CauseEffectConfig, ModelConfigurations, model_tokenizer_mapping
+from library.config import RunConfig, ModelConfigurations, model_tokenizer_mapping
 from library.evaluation import evaluate, predict
 from library.logging import initialize_log_dict
 from library.preprocessing import load_and_cache_examples
@@ -34,7 +34,7 @@ if __name__ == '__main__':
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     model_config = ModelConfigurations.RoBERTaSquadLarge
-    run_config = CauseEffectConfig()
+    run_config = RunConfig()
 
     RUN_NAME = 'model_run'
 
@@ -71,34 +71,13 @@ if __name__ == '__main__':
         global_step, tr_loss = train(train_dataset=train_dataset,
                                      model=model,
                                      tokenizer=tokenizer,
-                                     train_batch_size=PER_GPU_BATCH_SIZE,
                                      model_type=MODEL_TYPE,
                                      model_name_or_path=MODEL_NAME_OR_PATH,
                                      output_dir=OUTPUT_DIR,
                                      predict_file=EVAL_FILE,
                                      device=device,
-                                     max_steps=None,
-                                     gradient_accumulation_steps=GRADIENT_ACCUMULATION_STEPS,
-                                     num_train_epochs=NUM_TRAIN_EPOCHS,
-                                     warmup_steps=WARMUP_STEPS,
-                                     logging_steps=500,
                                      evaluate_during_training=True,
-                                     max_seq_length=MAX_SEQ_LENGTH,
-                                     doc_stride=DOC_STRIDE,
-                                     eval_batch_size=PER_GPU_EVAL_BATCH_SIZE,
-                                     n_best_size=N_BEST_SIZE,
-                                     max_answer_length=MAX_ANSWER_LENGTH,
-                                     sentence_boundary_heuristic=SENTENCE_BOUNDARY_HEURISTIC,
-                                     full_sentence_heuristic=FULL_SENTENCE_HEURISTIC,
-                                     shared_sentence_heuristic=SHARED_SENTENCE_HEURISTIC,
-                                     learning_rate=LEARNING_RATE,
-                                     differential_lr_ratio=DIFFERENTIAL_LR_RATIO,
                                      log_file=log_file,
-                                     overwrite_cache=OVERWRITE_CACHE,
-                                     optimizer_class=OPTIMIZER_CLASS,
-                                     weight_decay=WEIGHT_DECAY,
-                                     scheduler_function=SCHEDULER_FUNCTION,
-                                     top_n_sentences=TOP_N_SENTENCES
                                      )
 
         if not os.path.exists(OUTPUT_DIR):

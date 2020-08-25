@@ -36,24 +36,26 @@ model_tokenizer_mapping = {
 }
 
 
-class CauseEffectConfig:
+class RunConfig:
     def __init__(self,
                  do_train: bool = False,
                  do_eval: bool = True,
                  do_test: bool = False,
                  max_seq_length: int = 384,
                  doc_stride: int = 128,
-                 per_gpu_batch_size: int = 4,
+                 train_batch_size: int = 4,
                  gradient_accumulation_steps: int = 3,
                  warmup_steps: int = 50,
                  learning_rate: float = 3e-5,
                  differential_lr_ratio: float = 1.0,
-                 num_train_epoch: int = 5,
+                 max_grad_norm: float = 1.0,
+                 adam_epsilon: float = 1e-8,
+                 num_train_epochs: int = 5,
                  save_model: bool = True,
                  weight_decay: float = 0.0,
                  optimizer_class: torch.optim.Optimizer = AdamW,
                  scheduler_function: Callable = get_cosine_schedule_with_warmup,
-                 per_gpu_eval_size: int = 8,
+                 eval_batch_size: int = 8,
                  n_best_size: int = 5,
                  max_answer_length: int = 300,
                  sentence_boundary_heuristic: bool = True,
@@ -65,17 +67,19 @@ class CauseEffectConfig:
         self.do_test = do_test
         self.max_seq_length = max_seq_length
         self.doc_stride = doc_stride
-        self.per_gpu_batch_size = per_gpu_batch_size
+        self.train_batch_size = train_batch_size
         self.gradient_accumulation_steps = gradient_accumulation_steps
         self.warmup_steps = warmup_steps
         self.learning_rate = learning_rate
         self.differential_lr_ratio = differential_lr_ratio
-        self.num_train_epoch = num_train_epoch
+        self.max_grad_norm = max_grad_norm
+        self.adam_epsilon = adam_epsilon
+        self.num_train_epochs = num_train_epochs
         self.save_model = save_model
         self.weight_decay = weight_decay
         self.optimizer_class = optimizer_class
         self.scheduler_function = scheduler_function
-        self.per_gpu_eval_size = per_gpu_eval_size
+        self.eval_batch_size = eval_batch_size
         self.n_best_size = n_best_size
         self.max_answer_length = max_answer_length
         self.sentence_boundary_heuristic = sentence_boundary_heuristic

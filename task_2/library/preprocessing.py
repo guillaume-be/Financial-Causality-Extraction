@@ -17,7 +17,6 @@
 
 import logging
 import multiprocessing
-import os
 from functools import partial
 from pathlib import Path
 from typing import Union, List, Tuple
@@ -33,7 +32,7 @@ from tqdm import tqdm
 from transformers import PreTrainedTokenizerBase
 from transformers.tokenization_bert import whitespace_tokenize
 
-from .config import CauseEffectConfig
+from .config import RunConfig
 from .data import FinCausalExample, FinCausalFeatures, _is_punctuation
 
 logger = logging.getLogger(__name__)
@@ -41,7 +40,7 @@ logger = logging.getLogger(__name__)
 
 def load_and_cache_examples(file_path: Path,
                             tokenizer: PreTrainedTokenizerBase,
-                            run_config: CauseEffectConfig,
+                            run_config: RunConfig,
                             output_examples: bool = True,
                             evaluate: bool = False) -> \
         Union[Tuple[TensorDataset, List[FinCausalExample], List[FinCausalFeatures]],

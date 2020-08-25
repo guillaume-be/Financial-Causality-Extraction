@@ -21,117 +21,99 @@ from pathlib import Path
 from typing import Optional, Dict
 
 import torch
-from torch.utils.data import RandomSampler, DataLoader
+from torch.nn import Module
+from torch.utils.data import RandomSampler, DataLoader, TensorDataset
 from torch.utils.tensorboard import SummaryWriter
 from tqdm import trange, tqdm
-from transformers import AdamW, get_linear_schedule_with_warmup
+from transformers import AdamW, get_linear_schedule_with_warmup, PreTrainedTokenizerBase
 
+from .config import RunConfig
 from .evaluation import evaluate
 
 logger = logging.getLogger(__name__)
 
 
-def train(train_dataset, model, tokenizer, train_batch_size: int,
-          model_type: str, model_name_or_path: str, output_dir: str, predict_file: Path, log_file: Dict,
-          device: torch.device, max_steps: Optional[int], gradient_accumulation_steps: int, num_train_epochs: int,
-          warmup_steps: int, logging_steps: int, evaluate_during_training: bool,
-          max_seq_length: int, doc_stride: int, eval_batch_size: int,
-          n_best_size: int, max_answer_length: int,
-          sentence_boundary_heuristic: bool, full_sentence_heuristic: bool, shared_sentence_heuristic: bool,
-          learning_rate: float, weight_decay: float = 0.0, differential_lr_ratio: float = 0.0,
-          adam_epsilon: float = 1e-8, max_grad_norm: float = 1.0, overwrite_cache: bool = False,
-          optimizer_class=AdamW, scheduler_function=get_linear_schedule_with_warmup, top_n_sentences: bool = True):
-    """ Train the model """
-    tb_writer = SummaryWriter()
-
+def train(train_dataset: TensorDataset,
+          model: Module,
+          tokenizer: PreTrainedTokenizerBase,
+          model_type: str,
+          model_name_or_path: str,
+          output_dir: str,
+          predict_file: Path,
+          log_file: Dict,
+          device: torch.device,
+          evaluate_during_training: bool,
+          run_config: RunConfig):
     train_sampler = RandomSampler(train_dataset)
-    train_dataloader = DataLoader(train_dataset, sampler=train_sampler, batch_size=train_batch_size)
+    train_dataloader = DataLoader(train_dataset,
+                                  sampler=train_sampler,
+                                  batch_size=run_config.train_batch_size)
 
-    if max_steps is not None:
-        t_total = max_steps
-        num_train_epochs = max_steps // (len(train_dataloader) // gradient_accumulation_steps) + 1
-    else:
-        t_total = len(train_dataloader) // gradient_accumulation_steps * num_train_epochs
+    t_total = len(train_dataloader) // run_config.gradient_accumulation_steps * run_config.num_train_epochs
 
     # Prepare optimizer and schedule (linear warmup and decay)
     no_decay = ["bias", "LayerNorm.weight"]
     no_scaled_lr = ["cause_outputs", "effect_outputs"]
-    if differential_lr_ratio == 0:
+    if run_config.differential_lr_ratio == 0:
         differential_lr_ratio = 1.0
+    else:
+        differential_lr_ratio = run_config.differential_lr_ratio
     assert differential_lr_ratio <= 1, "ratio for language model layers should be <= 1"
     optimizer_grouped_parameters = [
         {
             "params": [p for n, p in model.named_parameters() if (not any(nd in n for nd in no_decay)
                                                                   and not any(nlr in n for nlr in no_scaled_lr))],
-            'lr': learning_rate * differential_lr_ratio,
-            "weight_decay": weight_decay,
+            'lr': run_config.learning_rate * differential_lr_ratio,
+            "weight_decay": run_config.weight_decay,
         },
         {
             "params": [p for n, p in model.named_parameters() if (not any(nd in n for nd in no_decay)
                                                                   and any(nlr in n for nlr in no_scaled_lr))],
-            'lr': learning_rate,
-            "weight_decay": weight_decay,
+            'lr': run_config.learning_rate,
+            "weight_decay": run_config.weight_decay,
         },
         {
             "params": [p for n, p in model.named_parameters() if (any(nd in n for nd in no_decay)
                                                                   and not any(nlr in n for nlr in no_scaled_lr))],
-            'lr': learning_rate * differential_lr_ratio,
+            'lr': run_config.learning_rate * differential_lr_ratio,
             "weight_decay": 0.0
         },
         {
             "params": [p for n, p in model.named_parameters() if (any(nd in n for nd in no_decay)
                                                                   and any(nlr in n for nlr in no_scaled_lr))],
-            'lr': learning_rate,
+            'lr': run_config.learning_rate,
             "weight_decay": 0.0
         },
     ]
-    optimizer = optimizer_class(optimizer_grouped_parameters, lr=learning_rate, eps=adam_epsilon)
+    optimizer = run_config.optimizer_class(optimizer_grouped_parameters,
+                                           lr=run_config.learning_rate,
+                                           eps=run_config.adam_epsilon)
     try:
-        scheduler = scheduler_function(optimizer, num_warmup_steps=warmup_steps, num_training_steps=t_total)
-        # scheduler = get_cosine_with_hard_restarts_schedule_with_warmup(optimizer, num_warmup_steps=warmup_steps, num_cycles=3, num_training_steps=t_total)
+        scheduler = run_config.scheduler_function(optimizer,
+                                                  num_warmup_steps=run_config.warmup_steps,
+                                                  num_training_steps=t_total)
     except:
-        scheduler = scheduler_function(optimizer, num_warmup_steps=warmup_steps)
-    # Check if saved optimizer or scheduler states exist
-    if os.path.isfile(os.path.join(model_name_or_path, "optimizer.pt")) and os.path.isfile(
-            os.path.join(model_name_or_path, "scheduler.pt")
-    ):
-        # Load in optimizer and scheduler states
-        optimizer.load_state_dict(torch.load(os.path.join(model_name_or_path, "optimizer.pt")))
-        scheduler.load_state_dict(torch.load(os.path.join(model_name_or_path, "scheduler.pt")))
+        scheduler = run_config.scheduler_function(optimizer,
+                                                  num_warmup_steps=run_config.warmup_steps)
 
     # Train!
     logger.info("***** Running training *****")
     logger.info("  Num examples = %d", len(train_dataset))
-    logger.info("  Num Epochs = %d", num_train_epochs)
+    logger.info("  Num Epochs = %d", run_config.num_train_epochs)
     logger.info(
         "  Total train batch size (w. parallel, distributed & accumulation) = %d",
-        train_batch_size * gradient_accumulation_steps
+        run_config.train_batch_size * run_config.gradient_accumulation_steps
     )
-    logger.info("  Gradient Accumulation steps = %d", gradient_accumulation_steps)
+    logger.info("  Gradient Accumulation steps = %d", run_config.gradient_accumulation_steps)
     logger.info("  Total optimization steps = %d", t_total)
 
     global_step = 1
     epochs_trained = 0
     steps_trained_in_current_epoch = 0
-    # Check if continuing training from a checkpoint
-    if os.path.exists(model_name_or_path):
-        try:
-            # set global_step to gobal_step of last saved checkpoint from model path
-            checkpoint_suffix = model_name_or_path.split("-")[-1].split("/")[0]
-            global_step = int(checkpoint_suffix)
-            epochs_trained = global_step // (len(train_dataloader) // gradient_accumulation_steps)
-            steps_trained_in_current_epoch = global_step % (len(train_dataloader) // gradient_accumulation_steps)
-
-            logger.info("  Continuing training from checkpoint, will skip to saved global_step")
-            logger.info("  Continuing training from epoch %d", epochs_trained)
-            logger.info("  Continuing training from global step %d", global_step)
-            logger.info("  Will skip the first %d steps in the first epoch", steps_trained_in_current_epoch)
-        except ValueError:
-            logger.info("  Starting fine-tuning.")
 
     tr_loss, logging_loss = 0.0, 0.0
     model.zero_grad()
-    train_iterator = trange(epochs_trained, int(num_train_epochs), desc="Epoch")
+    train_iterator = trange(epochs_trained, int(run_config.num_train_epochs), desc="Epoch")
 
     for _ in train_iterator:
         epoch_iterator = tqdm(train_dataloader, desc=f"Iteration Loss: {tr_loss / global_step}", position=0, leave=True)
@@ -162,23 +144,19 @@ def train(train_dataset, model, tokenizer, train_batch_size: int,
             # model outputs are always tuple in transformers (see doc)
             loss = outputs[0]
 
-            if gradient_accumulation_steps > 1:
-                loss = loss / gradient_accumulation_steps
+            if run_config.gradient_accumulation_steps > 1:
+                loss = loss / run_config.gradient_accumulation_steps
 
             loss.backward()
 
             tr_loss += loss.item()
-            if (step + 1) % gradient_accumulation_steps == 0:
-                torch.nn.utils.clip_grad_norm_(model.parameters(), max_grad_norm)
+            if (step + 1) % run_config.gradient_accumulation_steps == 0:
+                torch.nn.utils.clip_grad_norm_(model.parameters(), run_config.max_grad_norm)
 
                 optimizer.step()
                 scheduler.step()  # Update learning rate schedule
                 model.zero_grad()
                 global_step += 1
-
-            if max_steps is not None and global_step > max_steps:
-                epoch_iterator.close()
-                break
 
         # Log metrics
         if evaluate_during_training:
@@ -210,13 +188,9 @@ def train(train_dataset, model, tokenizer, train_batch_size: int,
             tokenizer.save_pretrained(_output_dir)
             logger.info("Best F1 score: saving model checkpoint to %s", _output_dir)
 
-            tb_writer.add_scalar("lr", scheduler.get_last_lr()[0], global_step)
-            tb_writer.add_scalar("loss", (tr_loss - logging_loss) / logging_steps, global_step)
             logging_loss = tr_loss
         if max_steps is not None and global_step > max_steps:
             train_iterator.close()
             break
-
-    tb_writer.close()
 
     return global_step, tr_loss / global_step
