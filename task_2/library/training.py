@@ -18,14 +18,13 @@
 import logging
 import os
 from pathlib import Path
-from typing import Optional, Dict
+from typing import Dict
 
 import torch
 from torch.nn import Module
 from torch.utils.data import RandomSampler, DataLoader, TensorDataset
-from torch.utils.tensorboard import SummaryWriter
 from tqdm import trange, tqdm
-from transformers import AdamW, get_linear_schedule_with_warmup, PreTrainedTokenizerBase
+from transformers import PreTrainedTokenizerBase
 
 from .config import RunConfig
 from .evaluation import evaluate
@@ -51,7 +50,7 @@ def train(train_dataset: TensorDataset,
 
     t_total = len(train_dataloader) // run_config.gradient_accumulation_steps * run_config.num_train_epochs
 
-    # Prepare optimizer and schedule (linear warmup and decay)
+    # Define Optimizer and learning rates / decay
     no_decay = ["bias", "LayerNorm.weight"]
     no_scaled_lr = ["cause_outputs", "effect_outputs"]
     if run_config.differential_lr_ratio == 0:
@@ -88,15 +87,17 @@ def train(train_dataset: TensorDataset,
     optimizer = run_config.optimizer_class(optimizer_grouped_parameters,
                                            lr=run_config.learning_rate,
                                            eps=run_config.adam_epsilon)
+
+    # Define Scheduler
     try:
         scheduler = run_config.scheduler_function(optimizer,
                                                   num_warmup_steps=run_config.warmup_steps,
                                                   num_training_steps=t_total)
-    except:
+    except ValueError:
         scheduler = run_config.scheduler_function(optimizer,
                                                   num_warmup_steps=run_config.warmup_steps)
 
-    # Train!
+    # Start training
     logger.info("***** Running training *****")
     logger.info("  Num examples = %d", len(train_dataset))
     logger.info("  Num Epochs = %d", run_config.num_train_epochs)
@@ -109,7 +110,6 @@ def train(train_dataset: TensorDataset,
 
     global_step = 1
     epochs_trained = 0
-    steps_trained_in_current_epoch = 0
 
     tr_loss, logging_loss = 0.0, 0.0
     model.zero_grad()
@@ -119,10 +119,6 @@ def train(train_dataset: TensorDataset,
         epoch_iterator = tqdm(train_dataloader, desc=f"Iteration Loss: {tr_loss / global_step}", position=0, leave=True)
         for step, batch in enumerate(epoch_iterator):
             epoch_iterator.set_description(f"Iteration Loss: {tr_loss / global_step}")
-            # Skip past any already trained steps if resuming training
-            if steps_trained_in_current_epoch > 0:
-                steps_trained_in_current_epoch -= 1
-                continue
 
             model.train()
             batch = tuple(t.to(device) for t in batch)
@@ -141,7 +137,6 @@ def train(train_dataset: TensorDataset,
                 del inputs["token_type_ids"]
 
             outputs = model(**inputs)
-            # model outputs are always tuple in transformers (see doc)
             loss = outputs[0]
 
             if run_config.gradient_accumulation_steps > 1:
@@ -152,9 +147,8 @@ def train(train_dataset: TensorDataset,
             tr_loss += loss.item()
             if (step + 1) % run_config.gradient_accumulation_steps == 0:
                 torch.nn.utils.clip_grad_norm_(model.parameters(), run_config.max_grad_norm)
-
                 optimizer.step()
-                scheduler.step()  # Update learning rate schedule
+                scheduler.step()
                 model.zero_grad()
                 global_step += 1
 
@@ -166,31 +160,25 @@ def train(train_dataset: TensorDataset,
                                file_path=predict_file,
                                model_type=model_type,
                                model_name_or_path=model_name_or_path,
-                               max_seq_length=max_seq_length,
-                               doc_stride=doc_stride,
-                               eval_batch_size=eval_batch_size,
+                               max_seq_length=run_config.max_seq_length,
+                               doc_stride=run_config.doc_stride,
+                               eval_batch_size=run_config.eval_batch_size,
                                output_dir=output_dir,
-                               n_best_size=n_best_size,
-                               max_answer_length=max_answer_length,
-                               sentence_boundary_heuristic=sentence_boundary_heuristic,
-                               full_sentence_heuristic=full_sentence_heuristic,
-                               shared_sentence_heuristic=shared_sentence_heuristic,
-                               overwrite_cache=overwrite_cache,
-                               top_n_sentences=top_n_sentences)
+                               n_best_size=run_config.n_best_size,
+                               max_answer_length=run_config.max_answer_length,
+                               sentence_boundary_heuristic=run_config.sentence_boundary_heuristic,
+                               full_sentence_heuristic=run_config.full_sentence_heuristic,
+                               shared_sentence_heuristic=run_config.shared_sentence_heuristic,
+                               top_n_sentences=run_config.top_n_sentences)
             log_file[f'step_{global_step}'] = metrics
 
             _output_dir = os.path.join(output_dir, "checkpoint-{}".format(global_step))
             if not os.path.exists(_output_dir):
                 os.makedirs(_output_dir)
-            # Take care of distributed/parallel training
+
             model_to_save = model.module if hasattr(model, "module") else model
             model_to_save.save_pretrained(_output_dir)
             tokenizer.save_pretrained(_output_dir)
             logger.info("Best F1 score: saving model checkpoint to %s", _output_dir)
-
-            logging_loss = tr_loss
-        if max_steps is not None and global_step > max_steps:
-            train_iterator.close()
-            break
 
     return global_step, tr_loss / global_step

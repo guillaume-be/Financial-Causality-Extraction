@@ -78,6 +78,7 @@ if __name__ == '__main__':
                                      device=device,
                                      evaluate_during_training=True,
                                      log_file=log_file,
+                                     run_config=run_config
                                      )
 
         if not os.path.exists(OUTPUT_DIR):
