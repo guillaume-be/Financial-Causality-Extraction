@@ -55,6 +55,7 @@ class RunConfig:
                  weight_decay: float = 0.0,
                  optimizer_class: torch.optim.Optimizer = AdamW,
                  scheduler_function: Callable = get_cosine_schedule_with_warmup,
+                 evaluate_during_training: bool = True,
                  eval_batch_size: int = 8,
                  n_best_size: int = 5,
                  max_answer_length: int = 300,
@@ -79,6 +80,7 @@ class RunConfig:
         self.weight_decay = weight_decay
         self.optimizer_class = optimizer_class
         self.scheduler_function = scheduler_function
+        self.evaluate_during_training = evaluate_during_training
         self.eval_batch_size = eval_batch_size
         self.n_best_size = n_best_size
         self.max_answer_length = max_answer_length

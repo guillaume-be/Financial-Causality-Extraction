@@ -38,11 +38,11 @@ from .data import FinCausalExample, FinCausalFeatures, _is_punctuation
 logger = logging.getLogger(__name__)
 
 
-def load_and_cache_examples(file_path: Path,
-                            tokenizer: PreTrainedTokenizerBase,
-                            run_config: RunConfig,
-                            output_examples: bool = True,
-                            evaluate: bool = False) -> \
+def load_examples(file_path: Path,
+                  tokenizer: PreTrainedTokenizerBase,
+                  run_config: RunConfig,
+                  output_examples: bool = True,
+                  evaluate: bool = False) -> \
         Union[Tuple[TensorDataset, List[FinCausalExample], List[FinCausalFeatures]],
               TensorDataset]:
     processor = FinCausalProcessor()

@@ -28,13 +28,15 @@ from typing import Dict, List
 
 import torch
 from torch import nn
+from torch.nn import Module
 from torch.utils.data import SequentialSampler, DataLoader
 from tqdm import tqdm
-from transformers import BasicTokenizer, PreTrainedTokenizer
+from transformers import BasicTokenizer, PreTrainedTokenizer, PreTrainedTokenizerBase
 
+from .config import RunConfig
 from .fincausal_evaluation.task2_evaluate import encode_causal_tokens, Task2Data
 from .data import FinCausalResult, FinCausalFeatures, FinCausalExample
-from .preprocessing import load_and_cache_examples
+from .preprocessing import load_examples
 from .fincausal_evaluation.task2_evaluate import evaluate as official_evaluate
 
 logger = logging.getLogger(__name__)
@@ -44,30 +46,33 @@ def to_list(tensor):
     return tensor.detach().cpu().tolist()
 
 
-def predict(model, tokenizer, device: torch.device, file_path: Path, model_type: str, model_name_or_path: str,
-            max_seq_length: int, doc_stride: int, eval_batch_size: int, output_dir: str,
-            n_best_size: int, max_answer_length: int,
-            sentence_boundary_heuristic: bool, full_sentence_heuristic: bool, shared_sentence_heuristic: bool,
-            overwrite_cache: bool = False, prefix="", top_n_sentences: bool = True):
-    dataset, examples, features = load_and_cache_examples(file_path, model_name_or_path, tokenizer,
-                                                          max_seq_length, doc_stride,
-                                                          output_examples=True, evaluate=True,
-                                                          overwrite_cache=overwrite_cache)
+def predict(model: Module,
+            tokenizer: PreTrainedTokenizerBase,
+            device: torch.device,
+            file_path: Path,
+            model_type: str,
+            output_dir: Path,
+            run_config: RunConfig):
+    dataset, examples, features = load_examples(file_path=file_path,
+                                                tokenizer=tokenizer,
+                                                output_examples=True,
+                                                evaluate=True,
+                                                run_config=run_config)
 
-    if not os.path.exists(output_dir):
-        os.makedirs(output_dir)
+    if not output_dir.is_dir():
+        output_dir.mkdir(parents=True, exist_ok=True)
 
     eval_sampler = SequentialSampler(dataset)
-    eval_dataloader = DataLoader(dataset, sampler=eval_sampler, batch_size=eval_batch_size)
+    eval_dataloader = DataLoader(dataset,
+                                 sampler=eval_sampler,
+                                 batch_size=run_config.eval_batch_size)
 
-    # Eval!
-    logger.info("***** Running evaluation {} *****".format(prefix))
+    # Start evaluation
+    logger.info("***** Running evaluation  *****")
     logger.info("  Num examples = %d", len(dataset))
-    logger.info("  Batch size = %d", eval_batch_size)
+    logger.info("  Batch size = %d", run_config.eval_batch_size)
 
     all_results = []
-    start_time = timeit.default_timer()
-
     sequence_added_tokens = tokenizer.max_len - tokenizer.max_len_single_sentence
 
     for batch in tqdm(eval_dataloader, desc="Evaluating", position=0, leave=True):
@@ -92,7 +97,6 @@ def predict(model, tokenizer, device: torch.device, file_path: Path, model_type:
             unique_id = int(eval_feature.unique_id)
 
             output = [to_list(output[i]) for output in outputs]
-
             start_cause_logits, end_cause_logits, start_effect_logits, end_effect_logits = output
             result = FinCausalResult(unique_id,
                                      start_cause_logits, end_cause_logits,
@@ -100,28 +104,20 @@ def predict(model, tokenizer, device: torch.device, file_path: Path, model_type:
 
             all_results.append(result)
 
-    eval_time = timeit.default_timer() - start_time
-    logger.info("  Evaluation done in total %f secs (%f sec per example)", eval_time, eval_time / len(dataset))
-
     # Compute predictions
-    output_prediction_file = os.path.join(output_dir, "predictions_{}.json".format(prefix))
-    csv_output_prediction_file = os.path.join(output_dir, "predictions_{}.csv".format(prefix))
-    output_nbest_file = os.path.join(output_dir, "nbest_predictions_{}.json".format(prefix))
+    output_prediction_file = os.path.join(output_dir, "predictions.json")
+    csv_output_prediction_file = os.path.join(output_dir, "predictions.csv")
+    output_nbest_file = os.path.join(output_dir, "nbest_predictions.json")
 
     predictions = compute_predictions_logits(
         examples,
         features,
         all_results,
-        n_best_size,
-        max_answer_length,
         output_prediction_file,
         csv_output_prediction_file,
         output_nbest_file,
         sequence_added_tokens,
-        sentence_boundary_heuristic,
-        full_sentence_heuristic,
-        shared_sentence_heuristic,
-        top_n_sentences
+        run_config
     )
 
     return examples, predictions
@@ -456,10 +452,7 @@ def compute_predictions_logits(
         csv_output_prediction_file,
         output_nbest_file,
         sequence_added_tokens,
-        sentence_boundary_heuristic,
-        full_sentence_heuristic,
-        shared_sentence_heuristic,
-        top_n_sentences):
+        run_config: RunConfig):
     """Write final predictions to the json file and log-odds of null if needed."""
     logger.info("Writing predictions to: %s" % output_prediction_file)
     logger.info("Writing nbest to: %s" % output_nbest_file)

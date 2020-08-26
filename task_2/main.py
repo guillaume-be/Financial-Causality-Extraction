@@ -24,7 +24,7 @@ import torch
 from library.config import RunConfig, ModelConfigurations, model_tokenizer_mapping
 from library.evaluation import evaluate, predict
 from library.logging import initialize_log_dict
-from library.preprocessing import load_and_cache_examples
+from library.preprocessing import load_examples
 from library.training import train
 
 logging.basicConfig(level=logging.INFO)
@@ -46,9 +46,9 @@ if __name__ == '__main__':
     TEST_FILE = fincausal_data_path / "task2.csv"
 
     if RUN_NAME:
-        OUTPUT_DIR = str(fincausal_output_path / (MODEL_NAME_OR_PATH + '_' + RUN_NAME))
+        OUTPUT_DIR = fincausal_output_path / (MODEL_NAME_OR_PATH + '_' + RUN_NAME)
     else:
-        OUTPUT_DIR = str(fincausal_output_path / MODEL_NAME_OR_PATH)
+        OUTPUT_DIR = fincausal_output_path / MODEL_NAME_OR_PATH
 
     model_class, tokenizer_class = model_tokenizer_mapping[MODEL_TYPE]
     log_file = initialize_log_dict(model_config=model_config,
@@ -63,23 +63,22 @@ if __name__ == '__main__':
                                                     cache_dir=OUTPUT_DIR)
         model = model_class.from_pretrained(MODEL_NAME_OR_PATH).to(device)
 
-        train_dataset = load_and_cache_examples(file_path=TRAIN_FILE,
-                                                tokenizer=tokenizer,
-                                                output_examples=False,
-                                                run_config=run_config)
+        train_dataset = load_examples(file_path=TRAIN_FILE,
+                                      tokenizer=tokenizer,
+                                      output_examples=False,
+                                      run_config=run_config)
 
-        global_step, tr_loss = train(train_dataset=train_dataset,
-                                     model=model,
-                                     tokenizer=tokenizer,
-                                     model_type=MODEL_TYPE,
-                                     model_name_or_path=MODEL_NAME_OR_PATH,
-                                     output_dir=OUTPUT_DIR,
-                                     predict_file=EVAL_FILE,
-                                     device=device,
-                                     evaluate_during_training=True,
-                                     log_file=log_file,
-                                     run_config=run_config
-                                     )
+        train(train_dataset=train_dataset,
+              model=model,
+              tokenizer=tokenizer,
+              model_type=MODEL_TYPE,
+              model_name_or_path=MODEL_NAME_OR_PATH,
+              output_dir=OUTPUT_DIR,
+              predict_file=EVAL_FILE,
+              device=device,
+              log_file=log_file,
+              run_config=run_config
+              )
 
         if not os.path.exists(OUTPUT_DIR):
             os.makedirs(OUTPUT_DIR)

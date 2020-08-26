@@ -16,7 +16,6 @@
 # limitations under the License.
 
 import logging
-import os
 from pathlib import Path
 from typing import Dict
 
@@ -37,11 +36,10 @@ def train(train_dataset: TensorDataset,
           tokenizer: PreTrainedTokenizerBase,
           model_type: str,
           model_name_or_path: str,
-          output_dir: str,
+          output_dir: Path,
           predict_file: Path,
           log_file: Dict,
           device: torch.device,
-          evaluate_during_training: bool,
           run_config: RunConfig):
     train_sampler = RandomSampler(train_dataset)
     train_dataloader = DataLoader(train_dataset,
@@ -152,8 +150,8 @@ def train(train_dataset: TensorDataset,
                 model.zero_grad()
                 global_step += 1
 
-        # Log metrics
-        if evaluate_during_training:
+        # Evaluate model and log metrics
+        if run_config.evaluate_during_training:
             metrics = evaluate(model=model,
                                tokenizer=tokenizer,
                                device=device,
@@ -172,12 +170,11 @@ def train(train_dataset: TensorDataset,
                                top_n_sentences=run_config.top_n_sentences)
             log_file[f'step_{global_step}'] = metrics
 
-            _output_dir = os.path.join(output_dir, "checkpoint-{}".format(global_step))
-            if not os.path.exists(_output_dir):
-                os.makedirs(_output_dir)
+            _output_dir = output_dir / "checkpoint-{}".format(global_step)
+            if not _output_dir.is_dir():
+                _output_dir.mkdir(parents=True, exist_ok=True)
 
-            model_to_save = model.module if hasattr(model, "module") else model
-            model_to_save.save_pretrained(_output_dir)
+            model.save_pretrained(_output_dir)
             tokenizer.save_pretrained(_output_dir)
             logger.info("Best F1 score: saving model checkpoint to %s", _output_dir)
 
