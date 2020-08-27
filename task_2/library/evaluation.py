@@ -20,18 +20,14 @@ import csv
 import json
 import logging
 import math
-import os
-import timeit
-from enum import Enum
 from pathlib import Path
 from typing import Dict, List
 
 import torch
-from torch import nn
 from torch.nn import Module
 from torch.utils.data import SequentialSampler, DataLoader
 from tqdm import tqdm
-from transformers import BasicTokenizer, PreTrainedTokenizer, PreTrainedTokenizerBase
+from transformers import PreTrainedTokenizerBase
 
 from .config import RunConfig
 from .fincausal_evaluation.task2_evaluate import encode_causal_tokens, Task2Data
@@ -105,17 +101,11 @@ def predict(model: Module,
             all_results.append(result)
 
     # Compute predictions
-    output_prediction_file = os.path.join(output_dir, "predictions.json")
-    csv_output_prediction_file = os.path.join(output_dir, "predictions.csv")
-    output_nbest_file = os.path.join(output_dir, "nbest_predictions.json")
-
     predictions = compute_predictions_logits(
         examples,
         features,
         all_results,
-        output_prediction_file,
-        csv_output_prediction_file,
-        output_nbest_file,
+        output_dir,
         sequence_added_tokens,
         run_config
     )
@@ -123,25 +113,30 @@ def predict(model: Module,
     return examples, predictions
 
 
-def evaluate(model, tokenizer, device: torch.device, file_path: Path, model_type: str, model_name_or_path: str,
-             max_seq_length: int, doc_stride: int, eval_batch_size: int, output_dir: str,
-             n_best_size: int, max_answer_length: int,
-             sentence_boundary_heuristic: bool, full_sentence_heuristic: bool, shared_sentence_heuristic: bool,
-             overwrite_cache: bool = False, prefix="", top_n_sentences: bool = True):
-    examples, predictions = predict(model, tokenizer, device, file_path, model_type, model_name_or_path, max_seq_length,
-                                    doc_stride, eval_batch_size, output_dir, n_best_size, max_answer_length,
-                                    sentence_boundary_heuristic, full_sentence_heuristic, shared_sentence_heuristic,
-                                    overwrite_cache, prefix, top_n_sentences)
+def evaluate(model: Module,
+             tokenizer: PreTrainedTokenizerBase,
+             device: torch.device,
+             file_path: Path,
+             model_type: str,
+             output_dir: Path,
+             run_config: RunConfig):
+    examples, predictions = predict(model=model,
+                                    tokenizer=tokenizer,
+                                    device=device,
+                                    file_path=file_path,
+                                    model_type=model_type,
+                                    output_dir=output_dir,
+                                    run_config=run_config)
 
     # Compute the F1 and exact scores.
     results, correct, wrong = compute_metrics(examples, predictions)
-    output_prediction_file_correct = os.path.join(output_dir, "predictions_{}_correct.json".format(prefix))
-    output_prediction_file_wrong = os.path.join(output_dir, "predictions_{}_wrong.json".format(prefix))
+    output_prediction_file_correct = output_dir / "predictions_correct.json"
+    output_prediction_file_wrong = output_dir / "predictions_wrong.json"
 
-    with open(output_prediction_file_correct, "w") as writer:
+    with output_prediction_file_correct.open('w') as writer:
         writer.write(json.dumps(correct, indent=4) + "\n")
 
-    with open(output_prediction_file_wrong, "w") as writer:
+    with output_prediction_file_wrong.open('w') as writer:
         writer.write(json.dumps(wrong, indent=4) + "\n")
 
     return results
@@ -304,9 +299,11 @@ def filter_impossible_spans(features,
                                     continue
                                 if end_index_effect >= len(feature.tokens) or end_index_cause >= len(feature.tokens):
                                     continue
-                                if start_index_effect not in feature.token_to_orig_map or start_index_cause not in feature.token_to_orig_map:
+                                if start_index_effect not in feature.token_to_orig_map or \
+                                        start_index_cause not in feature.token_to_orig_map:
                                     continue
-                                if end_index_effect not in feature.token_to_orig_map or end_index_cause not in feature.token_to_orig_map:
+                                if end_index_effect not in feature.token_to_orig_map or \
+                                        end_index_cause not in feature.token_to_orig_map:
                                     continue
                                 if (not feature.token_is_max_context.get(start_index_effect, False)) or \
                                         (not feature.token_is_max_context.get(start_index_cause, False)):
@@ -443,20 +440,12 @@ def get_predictions(preliminary_predictions: List[_PrelimPrediction], n_best_siz
 
 
 def compute_predictions_logits(
-        all_examples,
-        all_features,
-        all_results,
-        n_best_size,
-        max_answer_length,
-        output_prediction_file,
-        csv_output_prediction_file,
-        output_nbest_file,
-        sequence_added_tokens,
+        all_examples: List[FinCausalExample],
+        all_features: List[FinCausalFeatures],
+        all_results: List[FinCausalResult],
+        output_dir: Path,
+        sequence_added_tokens: int,
         run_config: RunConfig):
-    """Write final predictions to the json file and log-odds of null if needed."""
-    logger.info("Writing predictions to: %s" % output_prediction_file)
-    logger.info("Writing nbest to: %s" % output_nbest_file)
-
     example_index_to_features = collections.defaultdict(list)
     for feature in all_features:
         example_index_to_features[feature.example_index].append(feature)
@@ -471,28 +460,30 @@ def compute_predictions_logits(
     for (example_index, example) in enumerate(all_examples):
         features = example_index_to_features[example_index]
         suffix_index = 0
-        if example.example_id.count('.') == 2 and top_n_sentences:
+        if example.example_id.count('.') == 2 and run_config.top_n_sentences:
             suffix_index = int(example.example_id.split('.')[-1])
         prelim_predictions = filter_impossible_spans(features,
                                                      unique_id_to_result,
-                                                     n_best_size,
-                                                     max_answer_length,
+                                                     run_config.n_best_size,
+                                                     run_config.max_answer_length,
                                                      sequence_added_tokens,
-                                                     sentence_boundary_heuristic,
-                                                     full_sentence_heuristic,
-                                                     shared_sentence_heuristic, )
+                                                     run_config.sentence_boundary_heuristic,
+                                                     run_config.full_sentence_heuristic,
+                                                     run_config.shared_sentence_heuristic, )
         prelim_predictions = sorted(list(set(prelim_predictions)),
                                     key=lambda x: (x.start_logit_cause + x.end_logit_cause +
                                                    x.start_logit_effect + x.end_logit_effect),
                                     reverse=True)
 
-        nbest = get_predictions(prelim_predictions, n_best_size, features, example)
+        nbest = get_predictions(prelim_predictions, run_config.n_best_size, features, example)
 
         # In very rare edge cases we could have no valid predictions. So we
         # just create a none prediction in this case to avoid failure.
         if not nbest:
             nbest.append(_NbestPrediction(text_cause="empty", start_logit_cause=0.0, end_logit_cause=0.0,
-                                          text_effect="empty", start_logit_effect=0.0, end_logit_effect=0.0))
+                                          text_effect="empty", start_logit_effect=0.0, end_logit_effect=0.0,
+                                          start_index_effect=0, end_index_effect=0,
+                                          start_index_cause=0, end_index_cause=0))
 
         assert len(nbest) >= 1
 
@@ -505,14 +496,14 @@ def compute_predictions_logits(
                 if entry.text_cause and entry.text_effect:
                     best_non_null_entry = entry
 
-        probs = _compute_softmax(total_scores)
+        probabilities = _compute_softmax(total_scores)
 
         nbest_json = []
         current_example_spans = []
         for (i, entry) in enumerate(nbest):
             output = collections.OrderedDict()
             output["text"] = example.context_text
-            output["probability"] = probs[i]
+            output["probability"] = probabilities[i]
             output["cause_text"] = entry.text_cause
             output["cause_start_index"] = entry.start_index_cause
             output["cause_end_index"] = entry.end_index_cause
@@ -537,6 +528,11 @@ def compute_predictions_logits(
                                                "effect_text": nbest_json[suffix_index]["effect_text"]}
         all_nbest_json[example.example_id] = nbest_json
 
+    output_prediction_file = output_dir / "predictions.json"
+    csv_output_prediction_file = output_dir / "predictions.csv"
+    output_nbest_file = output_dir / "nbest_predictions.json"
+
+    logger.info("Writing predictions to: %s" % output_prediction_file)
     with open(output_prediction_file, "w") as writer:
         writer.write(json.dumps(all_predictions, indent=4) + "\n")
 
@@ -546,6 +542,7 @@ def compute_predictions_logits(
         for (example_id, prediction) in all_predictions.items():
             csv_writer.writerow([example_id, prediction['text'], prediction['cause_text'], prediction['effect_text']])
 
+    logger.info("Writing nbest to: %s" % output_nbest_file)
     with open(output_nbest_file, "w") as writer:
         writer.write(json.dumps(all_nbest_json, indent=4) + "\n")
 
@@ -600,7 +597,7 @@ def _compute_softmax(scores):
         exp_scores.append(x)
         total_sum += x
 
-    probs = []
+    probabilities = []
     for score in exp_scores:
-        probs.append(score / total_sum)
-    return probs
+        probabilities.append(score / total_sum)
+    return probabilities

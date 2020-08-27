@@ -35,7 +35,6 @@ def train(train_dataset: TensorDataset,
           model: Module,
           tokenizer: PreTrainedTokenizerBase,
           model_type: str,
-          model_name_or_path: str,
           output_dir: Path,
           predict_file: Path,
           log_file: Dict,
@@ -157,17 +156,8 @@ def train(train_dataset: TensorDataset,
                                device=device,
                                file_path=predict_file,
                                model_type=model_type,
-                               model_name_or_path=model_name_or_path,
-                               max_seq_length=run_config.max_seq_length,
-                               doc_stride=run_config.doc_stride,
-                               eval_batch_size=run_config.eval_batch_size,
                                output_dir=output_dir,
-                               n_best_size=run_config.n_best_size,
-                               max_answer_length=run_config.max_answer_length,
-                               sentence_boundary_heuristic=run_config.sentence_boundary_heuristic,
-                               full_sentence_heuristic=run_config.full_sentence_heuristic,
-                               shared_sentence_heuristic=run_config.shared_sentence_heuristic,
-                               top_n_sentences=run_config.top_n_sentences)
+                               run_config=run_config)
             log_file[f'step_{global_step}'] = metrics
 
             _output_dir = output_dir / "checkpoint-{}".format(global_step)

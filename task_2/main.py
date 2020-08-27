@@ -72,7 +72,6 @@ if __name__ == '__main__':
               model=model,
               tokenizer=tokenizer,
               model_type=MODEL_TYPE,
-              model_name_or_path=MODEL_NAME_OR_PATH,
               output_dir=OUTPUT_DIR,
               predict_file=EVAL_FILE,
               device=device,
