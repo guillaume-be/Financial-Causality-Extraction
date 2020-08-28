@@ -5,11 +5,11 @@ import torch
 from transformers import AdamW, get_cosine_schedule_with_warmup, AlbertTokenizer, XLNetTokenizer, RobertaTokenizer, \
     BertTokenizer, DistilBertTokenizer
 
-from library.models.albert import AlbertForCauseEffect
-from library.models.bert import BertForCauseEffect
-from library.models.distilbert import DistilBertForCauseEffect
-from library.models.roberta import RoBERTaForCauseEffect
-from library.models.xlnet import XLNetForCauseEffect
+from src.models.albert import AlbertForCauseEffect
+from src.models.bert import BertForCauseEffect
+from src.models.distilbert import DistilBertForCauseEffect
+from src.models.roberta import RoBERTaForCauseEffect
+from src.models.xlnet import XLNetForCauseEffect
 
 
 class ModelConfigurations(Enum):

@@ -17,13 +17,13 @@
 
 import logging
 from pathlib import Path
-from typing import Dict
+from typing import Dict, Union
 
 import torch
 from torch.nn import Module
 from torch.utils.data import RandomSampler, DataLoader, TensorDataset
 from tqdm import trange, tqdm
-from transformers import PreTrainedTokenizerBase
+from transformers import PreTrainedTokenizer, PreTrainedTokenizerFast
 
 from .config import RunConfig
 from .evaluation import evaluate
@@ -33,7 +33,7 @@ logger = logging.getLogger(__name__)
 
 def train(train_dataset: TensorDataset,
           model: Module,
-          tokenizer: PreTrainedTokenizerBase,
+          tokenizer: Union[PreTrainedTokenizer, PreTrainedTokenizerFast],
           model_type: str,
           output_dir: Path,
           predict_file: Path,
@@ -167,5 +167,3 @@ def train(train_dataset: TensorDataset,
             model.save_pretrained(_output_dir)
             tokenizer.save_pretrained(_output_dir)
             logger.info("Best F1 score: saving model checkpoint to %s", _output_dir)
-
-    return global_step, tr_loss / global_step

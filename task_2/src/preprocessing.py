@@ -17,6 +17,7 @@
 
 import logging
 import multiprocessing
+from collections import UserDict
 from functools import partial
 from pathlib import Path
 from typing import Union, List, Tuple
@@ -29,7 +30,7 @@ import pandas as pd
 import torch
 from torch.utils.data import TensorDataset
 from tqdm import tqdm
-from transformers import PreTrainedTokenizerBase
+from transformers import PreTrainedTokenizer, BatchEncoding, PreTrainedTokenizerFast
 from transformers.tokenization_bert import whitespace_tokenize
 
 from .config import RunConfig
@@ -39,7 +40,7 @@ logger = logging.getLogger(__name__)
 
 
 def load_examples(file_path: Path,
-                  tokenizer: PreTrainedTokenizerBase,
+                  tokenizer: Union[PreTrainedTokenizer, PreTrainedTokenizerFast],
                   run_config: RunConfig,
                   output_examples: bool = True,
                   evaluate: bool = False) -> \
@@ -65,13 +66,13 @@ def load_examples(file_path: Path,
 
 class FinCausalProcessor:
 
-    def get_examples(self, file_path: Path):
+    def get_examples(self, file_path: Path) -> List[FinCausalExample]:
         input_data = pd.read_csv(file_path, index_col=0, delimiter=';', header=0, skipinitialspace=True)
         input_data.columns = [col_name.strip() for col_name in input_data.columns]
         return self._create_examples(input_data)
 
     @staticmethod
-    def _create_examples(input_data):
+    def _create_examples(input_data: pd.DataFrame) -> List[FinCausalExample]:
 
         nlp = spacy.blank('en')
         nlp.add_pipe(PySBDFactory(nlp))
@@ -120,7 +121,8 @@ class FinCausalProcessor:
         return examples
 
 
-def fincausal_convert_example_to_features_init(tokenizer_for_convert):
+def fincausal_convert_example_to_features_init(
+        tokenizer_for_convert: Union[PreTrainedTokenizer, PreTrainedTokenizerFast]):
     global tokenizer
     tokenizer = tokenizer_for_convert
 
@@ -142,7 +144,7 @@ def _improve_answer_span(doc_tokens: List[str],
     return input_start, input_end
 
 
-def _check_is_max_context(doc_spans: List[dict],
+def _check_is_max_context(doc_spans: Union[List[dict], List[UserDict]],
                           cur_span_index: int,
                           position: int):
     """Check if this is the 'max context' doc span for the token."""
@@ -229,34 +231,34 @@ def fincausal_convert_example_to_features(example: FinCausalExample,
     else:
         tok_sentence_3_offset = None
 
-    spans = []
+    spans: List[BatchEncoding] = []
 
     sequence_added_tokens = tokenizer.max_len - tokenizer.max_len_single_sentence
 
     span_doc_tokens = all_doc_tokens
     while len(spans) * doc_stride < len(all_doc_tokens):
 
-        encoded_dict = tokenizer.encode_plus(span_doc_tokens,
-                                             max_length=max_seq_length,
-                                             return_overflowing_tokens=True,
-                                             pad_to_max_length=True,
-                                             stride=max_seq_length - doc_stride - sequence_added_tokens - 1,
-                                             truncation_strategy="only_first",
-                                             truncation=True,
-                                             return_token_type_ids=True,
-                                             )
+        encoded_dict: BatchEncoding = tokenizer.encode_plus(span_doc_tokens,
+                                                            max_length=max_seq_length,
+                                                            return_overflowing_tokens=True,
+                                                            pad_to_max_length=True,
+                                                            stride=max_seq_length - doc_stride - sequence_added_tokens - 1,
+                                                            truncation_strategy="only_first",
+                                                            truncation=True,
+                                                            return_token_type_ids=True,
+                                                            )
 
         paragraph_len = min(
             len(all_doc_tokens) - len(spans) * doc_stride,
             max_seq_length - sequence_added_tokens,
         )
-
         if tokenizer.pad_token_id in encoded_dict["input_ids"]:
             if tokenizer.padding_side == "right":
-                non_padded_ids = encoded_dict["input_ids"][: encoded_dict["input_ids"].index(tokenizer.pad_token_id)]
+                non_padded_ids = encoded_dict.data["input_ids"][
+                                 : encoded_dict.data["input_ids"].index(tokenizer.pad_token_id)]
             else:
                 last_padding_id_position = (
-                        len(encoded_dict["input_ids"])
+                        len(encoded_dict.data["input_ids"])
                         - 1
                         - encoded_dict["input_ids"][::-1].index(tokenizer.pad_token_id)
                 )
@@ -285,18 +287,16 @@ def fincausal_convert_example_to_features(example: FinCausalExample,
         span_doc_tokens = encoded_dict["overflowing_tokens"]
 
     for doc_span_index in range(len(spans)):
-        for j in range(spans[doc_span_index]["paragraph_len"]):
+        for j in range(spans[doc_span_index].data["paragraph_len"]):
             is_max_context = _check_is_max_context(spans, doc_span_index, doc_span_index * doc_stride + j)
-            spans[doc_span_index]["token_is_max_context"][j] = is_max_context
+            spans[doc_span_index].data["token_is_max_context"][j] = is_max_context
 
     for span in spans:
         # Identify the position of the CLS token
-        cls_index = span["input_ids"].index(tokenizer.cls_token_id)
+        cls_index = span.data["input_ids"].index(tokenizer.cls_token_id)
 
-        # p_mask: mask with 1 for token than cannot be in the answer (0 for token which can be in an answer)
-        # Original TF implem also keep the classification token (set to 0) (not sure why...)
-        p_mask = np.ones(len(span["token_type_ids"]))
-        p_mask[np.where(np.array(span["input_ids"]) == tokenizer.sep_token_id)[0]] = 1
+        p_mask = np.ones(len(span.data["token_type_ids"]))
+        p_mask[np.where(np.array(span.data["input_ids"]) == tokenizer.sep_token_id)[0]] = 1
         # Set the CLS index to '0'
         p_mask[cls_index] = 0
 
@@ -305,8 +305,8 @@ def fincausal_convert_example_to_features(example: FinCausalExample,
         cause_end_position = 0
         effect_start_position = 0
         effect_end_position = 0
-        doc_start = span["start"]
-        doc_end = span["start"] + span["length"] - 1
+        doc_start = span.data["start"]
+        doc_end = span.data["start"] + span.data["length"] - 1
         out_of_span = False
         if tokenizer.padding_side == "left":
             doc_offset = 0
@@ -367,10 +367,13 @@ def fincausal_convert_example_to_features(example: FinCausalExample,
     return features
 
 
-def fincausal_convert_examples_to_features(
-        examples: List[FinCausalExample], tokenizer, max_seq_length: int, doc_stride: int, is_training: bool,
-        return_dataset: Union[bool, str] = False, threads: int = 1
-):
+def fincausal_convert_examples_to_features(examples: List[FinCausalExample],
+                                           tokenizer: Union[PreTrainedTokenizer, PreTrainedTokenizerFast],
+                                           max_seq_length: int,
+                                           doc_stride: int,
+                                           is_training: bool, return_dataset: Union[bool, str] = False,
+                                           threads: int = 1) -> Union[List[FinCausalFeatures],
+                                                                      Tuple[List[FinCausalFeatures], TensorDataset]]:
     with multiprocessing.Pool(threads,
                               initializer=fincausal_convert_example_to_features_init,
                               initargs=(tokenizer,)) as p:
@@ -441,7 +444,7 @@ def fincausal_convert_examples_to_features(
     return features
 
 
-def _run_split_on_punc(text):
+def _run_split_on_punc(text: str) -> str:
     chars = list(text)
     i = 0
     start_new_word = True

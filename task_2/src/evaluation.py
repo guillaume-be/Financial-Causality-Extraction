@@ -21,13 +21,13 @@ import json
 import logging
 import math
 from pathlib import Path
-from typing import Dict, List
+from typing import Dict, List, Tuple, Union
 
 import torch
 from torch.nn import Module
 from torch.utils.data import SequentialSampler, DataLoader
 from tqdm import tqdm
-from transformers import PreTrainedTokenizerBase
+from transformers import PreTrainedTokenizer, PreTrainedTokenizerFast
 
 from .config import RunConfig
 from .fincausal_evaluation.task2_evaluate import encode_causal_tokens, Task2Data
@@ -38,17 +38,17 @@ from .fincausal_evaluation.task2_evaluate import evaluate as official_evaluate
 logger = logging.getLogger(__name__)
 
 
-def to_list(tensor):
+def to_list(tensor: torch.Tensor) -> List:
     return tensor.detach().cpu().tolist()
 
 
 def predict(model: Module,
-            tokenizer: PreTrainedTokenizerBase,
+            tokenizer: Union[PreTrainedTokenizer, PreTrainedTokenizerFast],
             device: torch.device,
             file_path: Path,
             model_type: str,
             output_dir: Path,
-            run_config: RunConfig):
+            run_config: RunConfig) -> Tuple[List[FinCausalExample], collections.OrderedDict]:
     dataset, examples, features = load_examples(file_path=file_path,
                                                 tokenizer=tokenizer,
                                                 output_examples=True,
@@ -114,12 +114,12 @@ def predict(model: Module,
 
 
 def evaluate(model: Module,
-             tokenizer: PreTrainedTokenizerBase,
+             tokenizer: Union[PreTrainedTokenizer, PreTrainedTokenizerFast],
              device: torch.device,
              file_path: Path,
              model_type: str,
              output_dir: Path,
-             run_config: RunConfig):
+             run_config: RunConfig) -> Dict:
     examples, predictions = predict(model=model,
                                     tokenizer=tokenizer,
                                     device=device,
@@ -142,7 +142,7 @@ def evaluate(model: Module,
     return results
 
 
-def get_data_from_list(input_data: List[List[str]]):
+def get_data_from_list(input_data: List[List[str]]) -> List[Task2Data]:
     """
     :param input_data: list of inputs (example id, text, cause, effect)
     :return: list of Task2Data(index, text, cause, effect, labels)
@@ -162,7 +162,8 @@ def get_data_from_list(input_data: List[List[str]]):
     return result
 
 
-def compute_metrics(examples: List[FinCausalExample], predictions: collections.OrderedDict):
+def compute_metrics(examples: List[FinCausalExample], predictions: collections.OrderedDict) \
+        -> Tuple[Dict, List[Dict], List[Dict]]:
     y_true = []
     y_pred = []
 
@@ -445,7 +446,7 @@ def compute_predictions_logits(
         all_results: List[FinCausalResult],
         output_dir: Path,
         sequence_added_tokens: int,
-        run_config: RunConfig):
+        run_config: RunConfig) -> collections.OrderedDict:
     example_index_to_features = collections.defaultdict(list)
     for feature in all_features:
         example_index_to_features[feature.example_index].append(feature)
@@ -568,7 +569,7 @@ class SpanCombination:
         return overlapping_cause and overlapping_effect
 
 
-def _get_best_indexes(logits, n_best_size):
+def _get_best_indexes(logits, n_best_size) -> List[int]:
     """Get the n-best logits from a list."""
     index_and_score = sorted(enumerate(logits), key=lambda x: x[1], reverse=True)
 
@@ -580,7 +581,7 @@ def _get_best_indexes(logits, n_best_size):
     return best_indexes
 
 
-def _compute_softmax(scores):
+def _compute_softmax(scores) -> List[float]:
     """Compute softmax probability over raw logits."""
     if not scores:
         return []

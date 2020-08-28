@@ -1,6 +1,6 @@
 from typing import Dict
 
-from library.config import ModelConfigurations, RunConfig
+from src.config import ModelConfigurations, RunConfig
 
 
 def initialize_log_dict(model_config: ModelConfigurations,
