@@ -159,13 +159,13 @@ class FinCausalResult:
             self.cls_logits = cls_logits
 
 
-def _is_whitespace(c):
-    if c == " " or c == "\t" or c == "\r" or c == "\n" or c == '\xa0' or ord(c) == 0x202F:
+def _is_whitespace(char: str) -> bool:
+    if char == " " or char == "\t" or char == "\r" or char == "\n" or char == '\xa0' or ord(char) == 0x202F:
         return True
     return False
 
 
-def _is_punctuation(char):
+def _is_punctuation(char: str) -> bool:
     cp = ord(char)
     if (33 <= cp <= 47) or (58 <= cp <= 64) or (91 <= cp <= 96) or (123 <= cp <= 126):
         return True

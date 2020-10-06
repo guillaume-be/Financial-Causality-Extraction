@@ -131,7 +131,7 @@ def _improve_answer_span(doc_tokens: List[str],
                          input_start: int,
                          input_end: int,
                          tokenizer,
-                         orig_answer_text: str):
+                         orig_answer_text: str) -> Tuple[int, int]:
     """Returns tokenized answer spans that better match the annotated answer."""
     tok_answer_text = " ".join(tokenizer.tokenize(orig_answer_text))
 
@@ -146,7 +146,7 @@ def _improve_answer_span(doc_tokens: List[str],
 
 def _check_is_max_context(doc_spans: Union[List[dict], List[UserDict]],
                           cur_span_index: int,
-                          position: int):
+                          position: int) -> bool:
     """Check if this is the 'max context' doc span for the token."""
     best_score = None
     best_span_index = None
@@ -169,7 +169,7 @@ def _check_is_max_context(doc_spans: Union[List[dict], List[UserDict]],
 def fincausal_convert_example_to_features(example: FinCausalExample,
                                           max_seq_length: int,
                                           doc_stride: int,
-                                          is_training: bool):
+                                          is_training: bool) -> List[FinCausalFeatures]:
     features = []
     if is_training:
         # Get start and end position
@@ -282,7 +282,7 @@ def fincausal_convert_example_to_features(example: FinCausalExample,
 
         spans.append(encoded_dict)
 
-        if "overflowing_tokens" not in encoded_dict:
+        if len(encoded_dict.get("overflowing_tokens", [])) == 0:
             break
         span_doc_tokens = encoded_dict["overflowing_tokens"]
 

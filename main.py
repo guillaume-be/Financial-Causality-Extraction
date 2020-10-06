@@ -19,6 +19,7 @@
 import json
 import logging
 import os
+import sys
 from pathlib import Path
 import torch
 from src.config import RunConfig, ModelConfigurations, model_tokenizer_mapping
@@ -39,10 +40,14 @@ if __name__ == '__main__':
     RUN_NAME = 'model_run'
 
     (MODEL_TYPE, MODEL_NAME_OR_PATH, DO_LOWER_CASE) = model_config.value
-    fincausal_data_path = Path(os.environ['FINCAUSAL_DATA_PATH'])
-    fincausal_output_path = Path(os.environ['FINCAUSAL_OUTPUT_PATH'])
-    TRAIN_FILE = fincausal_data_path / "fnp2020-train-90pc.csv"
-    EVAL_FILE = fincausal_data_path / "fnp2020-eval-90pc.csv"
+
+    fincausal_data_path = Path(os.environ.get('FINCAUSAL_DATA_PATH',
+                                              os.path.dirname(os.path.realpath(sys.argv[0])) + './data'))
+    fincausal_output_path = Path(os.environ.get('FINCAUSAL_OUTPUT_PATH',
+                                                os.path.dirname(os.path.realpath(sys.argv[0])) + './output'))
+
+    TRAIN_FILE = fincausal_data_path / "fnp2020-train.csv"
+    EVAL_FILE = fincausal_data_path / "fnp2020-eval.csv"
     TEST_FILE = fincausal_data_path / "task2.csv"
 
     if RUN_NAME:
