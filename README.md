@@ -1,15 +1,3 @@
-<style>
-table th:first-of-type {
-    width: 40%;
-}
-table th:nth-of-type(2) {
-    width: 30%;
-}
-table th:nth-of-type(3) {
-    width: 30%;
-}
-</style>
-
 # Span-based Causality Extraction for Financial Documents
 This repository contains the supporting code for the FinCausal 2020 submission titled `Span-based Causality Extraction for Financial Documents`. The model extracts cause and effect spans from financial documents, for example:
 
