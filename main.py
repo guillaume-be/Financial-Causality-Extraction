@@ -27,15 +27,48 @@ from src.evaluation import evaluate, predict
 from src.logging import initialize_log_dict
 from src.preprocessing import load_examples
 from src.training import train
+import argparse
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 if __name__ == '__main__':
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--train",
+        default=False,
+        required=False,
+        action="store_true",
+        help="Flag to specify if the model should be trained",
+    )
+
+    parser.add_argument(
+        "--eval",
+        default=False,
+        required=False,
+        action="store_true",
+        help="Flag to specify if the model should be evaluated",
+    )
+
+    parser.add_argument(
+        "--test",
+        default=False,
+        required=False,
+        action="store_true",
+        help="Flag to specify if the model should generate predictions on the train file",
+    )
+    args = parser.parse_args()
+    assert args.train or args.eval or args.test, \
+        "At least one task needs to be selected by passing --train, --eval or --test"
+
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     model_config = ModelConfigurations.RoBERTaSquadLarge
     run_config = RunConfig()
+    run_config.do_train = args.train
+    run_config.do_eval = args.eval
+    run_config.do_test = args.test
 
     RUN_NAME = 'model_run'
 
