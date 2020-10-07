@@ -37,10 +37,11 @@ The system is based on a RoBERTa span-extraction model (similar to Question Answ
  author = {Becquin, Guillaume}, 
  booktitle ={{The 1st Joint Workshop on Financial Narrative Processing and MultiLing Financial Summarisation (FNP-FNS 2020}}, 
  year = {2020}, 
- address = {Barcelona, Spain} }
+ address = {Barcelona, Spain} 
+}
 ```
 
-## How to run
+## Instructions
 
 0. Install requirements provided in `reuiquirements.py` (it is advised to use a virtual environment)
 1. Generate the train / development data split running running the `./utils/split_dataset.py`
