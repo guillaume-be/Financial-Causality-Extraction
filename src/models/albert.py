@@ -1,4 +1,4 @@
-# Copyright 2018 The Google AI Language Team Authors and The HuggingFace Inc. team.
+# Copyright 2018 Google AI, Google Brain and the HuggingFace Inc. team.
 # Copyright (c) 2018, NVIDIA CORPORATION.  All rights reserved.
 # Copyright 2020 Guillaume Becquin.
 # MODIFIED FOR CAUSE EFFECT EXTRACTION
